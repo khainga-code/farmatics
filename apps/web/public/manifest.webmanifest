@@ -1,0 +1,17 @@
+{
+  "name": "Farmatics",
+  "short_name": "Farmatics",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#1f6f43",
+  "description": "Poultry, livestock and store management for the farm.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
