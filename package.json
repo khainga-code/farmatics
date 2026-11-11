@@ -1,0 +1,23 @@
+{
+  "name": "farmatics",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "pnpm --filter @farmatics/api dev",
+    "dev:web": "pnpm --filter @farmatics/web dev",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @farmatics/db migrate",
+    "db:reset": "pnpm --filter @farmatics/db reset",
+    "seed": "pnpm --filter @farmatics/api seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.10",
+    "typescript": "^5.9.3"
+  }
+}

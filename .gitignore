@@ -54,6 +54,7 @@ test-results/
 Thumbs.db
 
 # Local data
+.data/
 *.sqlite
 *.sqlite3
 *.db
