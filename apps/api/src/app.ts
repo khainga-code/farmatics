@@ -11,6 +11,8 @@ import { AppError } from './errors.js';
 import { registerAuthRoutes } from './routes/auth.routes.js';
 import { registerEmployeeRoutes } from './routes/employee.routes.js';
 import { registerHealthRoutes } from './routes/health.routes.js';
+import { registerSyncRoutes } from './routes/sync.routes.js';
+import { createSyncService } from './sync/service.js';
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -75,6 +77,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   const sms = options.sms ?? createSmsSender(config.smsProvider);
   const service = createAuthService({ db, config, sms });
+  const sync = createSyncService({ db });
   const authenticate = createAuthenticate(config.jwtSecret);
 
   registerHealthRoutes(app, db);
@@ -83,6 +86,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     async (instance) => {
       registerAuthRoutes(instance, { service, config, authenticate });
       registerEmployeeRoutes(instance, { service, authenticate });
+      registerSyncRoutes(instance, { service: sync, authenticate });
     },
     { prefix: '/api/v1' },
   );

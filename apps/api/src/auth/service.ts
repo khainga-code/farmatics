@@ -34,6 +34,12 @@ import {
 
 const MAX_ATTEMPTS = 5;
 const OWNER_LOCK_MINUTES = 15;
+/**
+ * How long a just-rotated refresh token is still accepted. A lost response on a
+ * weak network must not sign the phone out; a token replayed much later is
+ * treated as stolen.
+ */
+const ROTATION_GRACE_MS = 30_000;
 
 export interface RequestMeta {
   ip?: string | null;
@@ -525,8 +531,9 @@ export function createAuthService(deps: {
         device_id: string | null;
         expires_at: unknown;
         revoked_at: unknown;
+        rotated_at: unknown;
       }>(
-        `select id, farm_id, user_id, device_id, expires_at, revoked_at
+        `select id, farm_id, user_id, device_id, expires_at, revoked_at, rotated_at
            from sessions
           where refresh_token_hash = $1`,
         [hashRefreshToken(refreshToken)],
@@ -539,6 +546,11 @@ export function createAuthService(deps: {
         throw unauthorized('Your session has expired. Sign in again.');
       }
 
+      const rotatedAt = asDate(session.rotated_at);
+      if (rotatedAt && Date.now() - rotatedAt.getTime() > ROTATION_GRACE_MS) {
+        throw unauthorized('Your session has ended. Sign in again.');
+      }
+
       const user = await admin.one<UserRow>('select * from users where id = $1', [
         session.user_id,
       ]);
@@ -546,8 +558,12 @@ export function createAuthService(deps: {
         throw unauthorized('This account is no longer active.');
       }
 
-      // Rotate: the old token stops working the moment it is used.
-      await admin.query('update sessions set revoked_at = now() where id = $1', [session.id]);
+      // Rotate: after the grace window the old token stops working. A token
+      // presented inside the window is the same phone retrying a reply it never
+      // received, so it gets a fresh session without revoking the successor.
+      if (!rotatedAt) {
+        await admin.query('update sessions set rotated_at = now() where id = $1', [session.id]);
+      }
 
       const deviceId = session.device_id ?? (await resolveDevice(user, {}));
       return issueSession(user, deviceId, meta);

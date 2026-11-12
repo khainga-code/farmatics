@@ -216,7 +216,7 @@ describe('sessions', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it('rotates the refresh token so a replayed one stops working', async () => {
+  it('rotates the refresh token and rejects a replay after the grace window', async () => {
     const { bundle } = await registerFarm();
 
     const first = await app.inject({
@@ -226,12 +226,48 @@ describe('sessions', () => {
     });
     expect(first.statusCode).toBe(200);
 
+    // Move the rotation into the past, as if the phone only came back much later.
+    await db.query(
+      `update sessions set rotated_at = now() - interval '10 minutes'
+        where user_id = $1 and rotated_at is not null`,
+      [bundle.user.id],
+    );
+
     const replay = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/refresh',
       payload: { refreshToken: bundle.refreshToken },
     });
     expect(replay.statusCode).toBe(401);
+  });
+
+  it('accepts a just-rotated token so a lost reply does not sign the phone out', async () => {
+    const { bundle } = await registerFarm();
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: bundle.refreshToken },
+    });
+    expect(first.statusCode).toBe(200);
+
+    // The reply carrying the new token never reached the device, so it retries
+    // with the only token it has.
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: bundle.refreshToken },
+    });
+    expect(retry.statusCode).toBe(200);
+    const recovered = retry.json<TokenBundle>();
+    expect(recovered.refreshToken).not.toBe(bundle.refreshToken);
+
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${recovered.accessToken}` },
+    });
+    expect(me.statusCode).toBe(200);
   });
 
   it('revokes the session on sign-out', async () => {
