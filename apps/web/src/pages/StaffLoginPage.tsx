@@ -6,7 +6,7 @@ import { Alert, AuthShell, Button, Field } from '../components/ui.js';
 
 export function StaffLoginPage() {
   const navigate = useNavigate();
-  const { applyProfile } = useAuth();
+  const { applyProfile, rememberPin } = useAuth();
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +19,10 @@ export function StaffLoginPage() {
 
     try {
       await api.staffLogin(username, pin);
-      applyProfile(await api.profile());
+      await applyProfile(await api.profile());
+      // Staff already know their PIN, so it can unlock this phone offline
+      // straight away without another trip through the PIN screen.
+      await rememberPin(pin).catch(() => {});
       navigate('/', { replace: true });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Could not reach the server.');

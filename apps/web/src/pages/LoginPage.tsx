@@ -6,7 +6,7 @@ import { Alert, AuthShell, Button, Field } from '../components/ui.js';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { applyProfile } = useAuth();
+  const { applyProfile, notice } = useAuth();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +19,7 @@ export function LoginPage() {
 
     try {
       await api.login(phone, password);
-      applyProfile(await api.profile());
+      await applyProfile(await api.profile());
       navigate('/', { replace: true });
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Could not reach the server.');
@@ -41,6 +41,7 @@ export function LoginPage() {
       }
     >
       <form className="form" onSubmit={onSubmit} noValidate>
+        {notice && <Alert tone="warning">{notice}</Alert>}
         {error && <Alert tone="error">{error}</Alert>}
 
         <Field

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth.js';
+import { LockScreen } from './components/LockScreen.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
@@ -16,9 +17,10 @@ function Boot() {
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, locked } = useAuth();
   if (loading) return <Boot />;
   if (!user) return <Navigate to="/login" replace />;
+  if (locked) return <LockScreen />;
   return <>{children}</>;
 }
 

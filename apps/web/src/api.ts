@@ -2,6 +2,9 @@ import type {
   AuthProfile,
   CreateEmployeeInput,
   EmployeeCreated,
+  SyncPullResponse,
+  SyncPushRecord,
+  SyncPushResponse,
   TokenBundle,
   UserDto,
 } from '@farmatics/shared';
@@ -108,6 +111,12 @@ async function refreshSession(): Promise<boolean> {
     });
 
     if (!response.ok) {
+      if (response.status >= 500) {
+        // The server is unreachable or broken, not the token. Keep the saved
+        // session so the phone can still be unlocked offline.
+        throw new Error('Could not reach the server to refresh the session.');
+      }
+
       // Only discard the session if it has not already been replaced by a
       // refresh that won the race.
       if (refreshToken === attempted) clearTokens();
@@ -231,6 +240,24 @@ export const api = {
 
   async unlockEmployee(id: string): Promise<void> {
     return request<void>(`/api/v1/employees/${id}/unlock`, { method: 'POST' });
+  },
+
+  /** This phone's server-side id, kept after the first sign-in. */
+  currentDeviceId(): string | null {
+    return deviceId;
+  },
+
+  async syncPush(records: SyncPushRecord[]): Promise<SyncPushResponse> {
+    return request<SyncPushResponse>('/api/v1/sync/push', {
+      method: 'POST',
+      body: JSON.stringify({ deviceId: deviceId ?? undefined, records }),
+    });
+  },
+
+  async syncPull(cursor: string, limit = 100): Promise<SyncPullResponse> {
+    return request<SyncPullResponse>(
+      `/api/v1/sync/pull?cursor=${encodeURIComponent(cursor)}&limit=${limit}`,
+    );
   },
 
   /** Creates a session from a refresh token already on the device. */

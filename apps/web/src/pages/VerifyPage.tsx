@@ -29,7 +29,7 @@ export function VerifyPage() {
     try {
       await api.verifyRegistration(state!.phone!, code);
       const profile = await api.profile();
-      applyProfile(profile);
+      await applyProfile(profile);
       navigate('/', { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError) {

@@ -3,6 +3,7 @@ import type { Role, UserDto } from '@farmatics/shared';
 import { ApiError, api } from '../api.js';
 import { useAuth } from '../auth.js';
 import { Alert, Badge, Button, Field } from '../components/ui.js';
+import { SyncCard } from '../components/SyncCard.js';
 
 const ROLE_LABELS: Record<Role, string> = {
   owner: 'Farm owner',
@@ -126,11 +127,13 @@ export function DashboardPage() {
               ))}
             </div>
             <p className="muted">
-              A registered phone can keep working for {farm?.offlineDaysAllowed ?? 14} days before
-              it must sign in again. Currency: {farm?.currency ?? 'KES'}.
+              With a PIN set, this phone keeps working for {farm?.offlineDaysAllowed ?? 14} days
+              without internet. Currency: {farm?.currency ?? 'KES'}.
             </p>
           </div>
         </section>
+
+        <SyncCard />
 
         {isManager && (
           <section className="card">
@@ -285,6 +288,7 @@ function ChangePinCard({
   const [confirmPin, setConfirmPin] = useState('');
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const { rememberPin } = useAuth();
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -298,6 +302,8 @@ function ChangePinCard({
     setBusy(true);
     try {
       await api.changePin(mustProvideCurrent ? currentPin : undefined, newPin);
+      // Keep a local verifier so this PIN also unlocks the app with no signal.
+      await rememberPin(newPin).catch(() => {});
       setCurrentPin('');
       setNewPin('');
       setConfirmPin('');
