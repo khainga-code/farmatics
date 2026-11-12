@@ -11,7 +11,7 @@
     "dev:api": "pnpm --filter @farmatics/api dev",
     "dev:web": "pnpm --filter @farmatics/web dev",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=1",
     "db:migrate": "pnpm --filter @farmatics/db migrate",
     "db:reset": "pnpm --filter @farmatics/db reset",
     "seed": "pnpm --filter @farmatics/api seed"
