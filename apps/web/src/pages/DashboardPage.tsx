@@ -1,9 +1,30 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { Role, UserDto } from '@farmatics/shared';
+import { Link } from 'react-router-dom';
+import {
+  reminderIsDue,
+  roundKg,
+  toDateOnly,
+  vaccinationSchedule,
+  type Role,
+  type UserDto,
+} from '@farmatics/shared';
 import { ApiError, api } from '../api.js';
 import { useAuth } from '../auth.js';
+import { AppLayout } from '../components/AppLayout.js';
 import { Alert, Badge, Button, Field } from '../components/ui.js';
 import { SyncCard } from '../components/SyncCard.js';
+import {
+  balanceFor,
+  onHandFor,
+  toBatches,
+  toMortality,
+  toSales,
+  toStockItems,
+  toStockMovements,
+  toTransfers,
+  toVaccinations,
+  useFarmData,
+} from '../local.js';
 
 const ROLE_LABELS: Record<Role, string> = {
   owner: 'Farm owner',
@@ -18,8 +39,37 @@ const permissionLabel = (permission: string) =>
   permission.replaceAll('_', ' ').replace(/^\w/, (c) => c.toUpperCase());
 
 export function DashboardPage() {
-  const { user, farm, permissions, signOut, refresh } = useAuth();
+  const { user, farm, permissions, refresh } = useAuth();
   const isManager = permissions.includes('manage_accounts');
+
+  const { data } = useFarmData();
+  const batches = toBatches(data.batches);
+  const mortality = toMortality(data.mortality_events);
+  const sales = toSales(data.bird_sales);
+  const transfers = toTransfers(data.bird_transfers);
+  const vaccinations = toVaccinations(data.vaccination_events);
+  const stockItems = toStockItems(data.stock_items);
+  const movements = toStockMovements(data.stock_movements);
+
+  const today = toDateOnly(new Date());
+  const liveBirds = batches.reduce(
+    (total, batch) => total + balanceFor(batch, mortality, sales, transfers).live,
+    0,
+  );
+  const feedOnHand = roundKg(
+    stockItems.reduce((total, item) => total + onHandFor(item.id, movements), 0),
+  );
+  const pendingVaccinations = batches.reduce((total, batch) => {
+    const done = new Set(
+      vaccinations.filter((event) => event.batchId === batch.id).map((event) => event.day),
+    );
+    return (
+      total +
+      vaccinationSchedule(batch.arrivalDate).filter(
+        (dose) => !done.has(dose.day) && reminderIsDue(dose, today),
+      ).length
+    );
+  }, 0);
 
   const [employees, setEmployees] = useState<UserDto[]>([]);
   const [listError, setListError] = useState<string | null>(null);
@@ -94,24 +144,54 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-heading">
-          <p className="app-eyebrow">{farm?.name ?? 'Your farm'}</p>
-          <h1 className="app-title">Good to see you, {user.name.split(' ')[0]}</h1>
-          <p className="app-sub">
-            {ROLE_LABELS[user.role]} · {user.phone}
-          </p>
-        </div>
-        <Button variant="ghost" onClick={() => void signOut()}>
-          Sign out
-        </Button>
-      </header>
-
-      <main className="app-main">
+    <AppLayout
+      title={`Good to see you, ${user.name.split(' ')[0]}`}
+      subtitle={`${ROLE_LABELS[user.role]} · ${user.phone}`}
+    >
         {user.mustChangePin && (
           <ChangePinCard mustProvideCurrent onChanged={() => void refresh()} />
         )}
+
+        <section className="card">
+          <div className="card-head">
+            <h2 className="card-title">Today on the farm</h2>
+            <Link to="/poultry">Open poultry</Link>
+          </div>
+          <div className="card-body">
+            <div className="status-grid">
+              <div>
+                <div className="status-label">Batches</div>
+                <div className="status-value">{batches.length}</div>
+              </div>
+              <div>
+                <div className="status-label">Birds alive</div>
+                <div className="status-value">{liveBirds}</div>
+              </div>
+              <div>
+                <div className="status-label">Feed on hand</div>
+                <div className="status-value">{feedOnHand} kg</div>
+              </div>
+              <div>
+                <div className="status-label">Vaccinations to do</div>
+                <div className="status-value">{pendingVaccinations}</div>
+              </div>
+            </div>
+            <div className="sync-actions">
+              <Link className="btn btn--ghost" to="/poultry">
+                Batches and reminders
+              </Link>
+              {permissions.some((permission) =>
+                ['manage_setup', 'receive_stock', 'reserve_feed', 'record_feeding'].includes(
+                  permission,
+                ),
+              ) && (
+                <Link className="btn btn--ghost" to="/store">
+                  Feed store
+                </Link>
+              )}
+            </div>
+          </div>
+        </section>
 
         <section className="card">
           <div className="card-head">
@@ -271,8 +351,7 @@ export function DashboardPage() {
         {!user.mustChangePin && (
           <ChangePinCard mustProvideCurrent={false} onChanged={() => void refresh()} />
         )}
-      </main>
-    </div>
+    </AppLayout>
   );
 }
 

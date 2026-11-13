@@ -563,6 +563,67 @@ select.input {
   font-size: 13px;
 }
 
+/* -------------------------------------------------------------- modules --- */
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.nav-link {
+  padding: 10px 14px;
+  border-bottom: 2px solid transparent;
+  border-radius: 10px 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  background: var(--green-50);
+  text-decoration: none;
+}
+
+.nav-link--active {
+  color: var(--green-900);
+  border-bottom-color: var(--green-700);
+}
+
+.page-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: -6px 0 14px;
+}
+
+a.btn {
+  text-decoration: none;
+}
+
+.record-form {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sand);
+  padding: 14px;
+}
+
+.card-head--flat {
+  padding: 0 0 12px;
+  border-bottom: none;
+  background: transparent;
+}
+
 /* ---------------------------------------------------------------- boot --- */
 
 .boot {

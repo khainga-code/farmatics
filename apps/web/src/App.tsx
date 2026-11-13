@@ -2,10 +2,13 @@ import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth.js';
 import { LockScreen } from './components/LockScreen.js';
+import { BatchPage } from './pages/BatchPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { PoultryPage } from './pages/PoultryPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
 import { StaffLoginPage } from './pages/StaffLoginPage.js';
+import { StorePage } from './pages/StorePage.js';
 import { VerifyPage } from './pages/VerifyPage.js';
 
 function Boot() {
@@ -39,6 +42,30 @@ export function App() {
         element={
           <RequireAuth>
             <DashboardPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/poultry"
+        element={
+          <RequireAuth>
+            <PoultryPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/poultry/:batchId"
+        element={
+          <RequireAuth>
+            <BatchPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/store"
+        element={
+          <RequireAuth>
+            <StorePage />
           </RequireAuth>
         }
       />

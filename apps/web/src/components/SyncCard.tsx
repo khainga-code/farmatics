@@ -23,32 +23,32 @@ export function SyncCard() {
   const [attention, setAttention] = useState<SyncRejection[]>([]);
   const [lastSuccess, setLastSuccess] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
-  const [probeCount, setProbeCount] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
   const [probeNote, setProbeNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refreshState = useCallback(async () => {
-    const [waiting, rejected, success, error, probes] = await Promise.all([
+    const [waiting, rejected, success, error, saved] = await Promise.all([
       syncClient.pendingCount(),
       syncClient.attention(),
       syncDb.meta.get('lastSuccessAt'),
       syncDb.meta.get('lastError'),
-      syncClient.listRecords('probes'),
+      syncDb.records.count(),
     ]);
 
     setPending(waiting);
     setAttention(rejected);
     setLastSuccess(success?.value ?? null);
     setLastError(error?.value ?? null);
-    setProbeCount(probes.length);
+    setSavedCount(saved);
   }, []);
 
   useEffect(() => {
     void refreshState();
 
-    const stop = syncClient.startLoop({
-      intervalMs: 30_000,
-      onResult: () => void refreshState(),
+    // The layout owns the sync loop; the card only listens for changes.
+    const unsubscribe = syncClient.subscribe(() => {
+      void refreshState();
     });
 
     const handleOnline = () => {
@@ -57,7 +57,7 @@ export function SyncCard() {
     window.addEventListener('online', handleOnline);
 
     return () => {
-      stop();
+      unsubscribe();
       window.removeEventListener('online', handleOnline);
     };
   }, [refreshState]);
@@ -110,7 +110,7 @@ export function SyncCard() {
           </div>
           <div>
             <div className="status-label">Saved on this phone</div>
-            <div className="status-value">{probeCount}</div>
+            <div className="status-value">{savedCount}</div>
           </div>
         </div>
 
