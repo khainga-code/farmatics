@@ -93,6 +93,29 @@ try {
          values ($1, $2, $3, 12, 'Gumboro', now() - interval '8 days', $4)`,
         [randomUUID(), farmId, batchId, ownerId],
       );
+
+      // Money: one approved cost and one still waiting, so the finance screen
+      // shows both states on first sign-in.
+      const chickExpenseId = randomUUID();
+      const transportExpenseId = randomUUID();
+
+      await tx.query(
+        `insert into expenses
+           (id, farm_id, category, amount_kes, paid_to, method, batch_id, note, recorded_at, recorded_by)
+         values
+           ($1, $3, 'chicks', 18000, 'Kenya Feeds', 'cash', $4, 'Day-old chicks',
+            now() - interval '20 days', $5),
+           ($2, $3, 'transport', 2500, 'Boda rider', 'mpesa', $4, 'Chicks to the farm',
+            now() - interval '18 days', $5)`,
+        [chickExpenseId, transportExpenseId, farmId, batchId, ownerId],
+      );
+      await tx.query(
+        `insert into expense_approvals
+           (id, farm_id, expense_id, decision, note, recorded_at, recorded_by)
+         values ($1, $2, $3, 'approved', 'Paid on delivery',
+                 now() - interval '20 days', $4)`,
+        [randomUUID(), farmId, chickExpenseId, ownerId],
+      );
     });
 
     console.log('Demo farm created:');

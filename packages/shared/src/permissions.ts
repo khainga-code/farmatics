@@ -56,9 +56,9 @@ const operate: Permission[] = [
  */
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   owner: PERMISSIONS,
-  // Stock keeper duties plus every operational report, but no accounts and
-  // no expense approval.
-  farm_manager: [...operate, 'view_reports'],
+  // Stock keeper duties plus every operational report, and the money side:
+  // the client asked that farm managers be able to record and approve expenses.
+  farm_manager: [...operate, 'view_reports', 'view_finance', 'record_expense', 'approve_expense'],
   // Records the day's work in the poultry house and the store.
   stock_keeper: [...operate],
   // Sells only from their own allocation; sees no finance.

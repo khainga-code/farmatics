@@ -1,6 +1,8 @@
 import type { Db } from '@farmatics/db';
 import {
   batchInputSchema,
+  expenseApprovalInputSchema,
+  expenseInputSchema,
   houseInputSchema,
   mortalityInputSchema,
   saleInputSchema,
@@ -11,6 +13,8 @@ import {
   transferInputSchema,
   vaccinationInputSchema,
   type BatchInput,
+  type ExpenseApprovalInput,
+  type ExpenseInput,
   type HouseInput,
   type MortalityInput,
   type Permission,
@@ -437,6 +441,7 @@ const saleEntity: SyncEntity = {
       count: input.count,
       buyer: input.buyer ?? null,
       note: input.note ?? null,
+      unit_price_kes: input.unitPriceKes ?? null,
       ...eventColumns(ctx, input),
     });
     if (!row) return null;
@@ -456,6 +461,7 @@ const saleEntity: SyncEntity = {
         count: num(row['count']),
         buyer: row['buyer'],
         note: row['note'],
+        unitPriceKes: row['unit_price_kes'] === null ? null : num(row['unit_price_kes']),
         recordedAt: asIso(row['recorded_at']),
         recordedBy: row['recorded_by'],
         clientTime: asIso(row['client_time']),
@@ -595,6 +601,110 @@ const stockMovementEntity: SyncEntity = {
   },
 };
 
+const expenseEntity: SyncEntity = {
+  table: 'expenses',
+  schema: expenseInputSchema,
+  permissionsFor: () => ['record_expense'],
+
+  async insert(tx, ctx, id, data) {
+    const input = data as ExpenseInput;
+    if (input.batchId) await requireBatch(tx, ctx.farmId, input.batchId);
+
+    const row = await insertOne(tx, 'expenses', {
+      id,
+      farm_id: ctx.farmId,
+      category: input.category,
+      amount_kes: input.amountKes,
+      paid_to: input.paidTo ?? null,
+      method: input.method,
+      batch_id: input.batchId ?? null,
+      note: input.note ?? null,
+      ...eventColumns(ctx, input),
+    });
+    return row ? { changeSeq: String(row.change_seq) } : null;
+  },
+
+  toChange(row) {
+    return {
+      table: 'expenses',
+      id: String(row['id']),
+      changeSeq: String(row['change_seq']),
+      deletedAt: asIso(row['deleted_at']),
+      data: {
+        category: row['category'],
+        amountKes: num(row['amount_kes']),
+        paidTo: row['paid_to'],
+        method: row['method'],
+        batchId: row['batch_id'],
+        note: row['note'],
+        recordedAt: asIso(row['recorded_at']),
+        recordedBy: row['recorded_by'],
+        clientTime: asIso(row['client_time']),
+      },
+    };
+  },
+};
+
+const expenseApprovalEntity: SyncEntity = {
+  table: 'expense_approvals',
+  schema: expenseApprovalInputSchema,
+  permissionsFor: () => ['approve_expense'],
+
+  async insert(tx, ctx, id, data) {
+    const input = data as ExpenseApprovalInput;
+
+    const expense = await tx.one<{ id: string }>(
+      'select id from expenses where id = $1 and farm_id = $2 and deleted_at is null',
+      [input.expenseId, ctx.farmId],
+    );
+    if (!expense) {
+      throw new SyncValidationError(
+        'unknown_expense',
+        'That expense is not on this farm. Refresh and try again.',
+      );
+    }
+
+    try {
+      const row = await insertOne(tx, 'expense_approvals', {
+        id,
+        farm_id: ctx.farmId,
+        expense_id: input.expenseId,
+        decision: input.decision,
+        note: input.note ?? null,
+        ...eventColumns(ctx, input),
+      });
+      return row ? { changeSeq: String(row.change_seq) } : null;
+    } catch (error) {
+      // An expense has one decision. A second, different decision collides with
+      // the partial unique index rather than overwriting the first.
+      if ((error as { code?: string }).code === '23505') {
+        throw new SyncValidationError(
+          'already_decided',
+          'This expense already has a decision.',
+        );
+      }
+      throw error;
+    }
+  },
+
+  toChange(row) {
+    return {
+      table: 'expense_approvals',
+      id: String(row['id']),
+      changeSeq: String(row['change_seq']),
+      deletedAt: asIso(row['deleted_at']),
+      data: {
+        expenseId: row['expense_id'],
+        decision: row['decision'],
+        note: row['note'],
+        recordedAt: asIso(row['recorded_at']),
+        recordedBy: row['recorded_by'],
+        clientTime: asIso(row['client_time']),
+      },
+    };
+  },
+};
+
 const ENTITIES: SyncEntity[] = [
   probeEntity,
   houseEntity,
@@ -605,6 +715,8 @@ const ENTITIES: SyncEntity[] = [
   vaccinationEntity,
   stockItemEntity,
   stockMovementEntity,
+  expenseEntity,
+  expenseApprovalEntity,
 ];
 
 export function findEntity(table: string): SyncEntity | undefined {
@@ -625,6 +737,8 @@ export const entitySchemas = {
   vaccination_events: vaccinationInputSchema,
   stock_items: stockItemInputSchema,
   stock_movements: stockMovementInputSchema,
+  expenses: expenseInputSchema,
+  expense_approvals: expenseApprovalInputSchema,
 } as const;
 
 export type ProbeData = z.infer<typeof probeSchema>;

@@ -200,6 +200,8 @@ export const saleInputSchema = z.object({
   count: z.number().int().min(1, 'Enter at least one bird.').max(1_000_000),
   buyer: trimmed(0, 120, 'Keep the buyer name under 120 characters.').optional(),
   note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
+  /** Price per bird in KES. Older queued sales may omit it. */
+  unitPriceKes: z.number().min(0).max(1_000_000).optional(),
   recordedAt: isoTimestampSchema,
   clientTime: isoTimestampSchema.optional(),
 });
