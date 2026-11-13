@@ -19,6 +19,12 @@ export interface OutboxEntry {
   recordId: string;
   data: Record<string, unknown>;
   createdAt: string;
+  /**
+   * Monotonic sequence from the phone. A house must reach the server before
+   * the batch that points at it, so the outbox is pushed in this order rather
+   * than in the order the rows happen to come back from IndexedDB.
+   */
+  order?: number;
   attempts: number;
   status: 'pending' | 'rejected';
   reason?: string;

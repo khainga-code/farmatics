@@ -72,6 +72,11 @@ export interface SyncClient {
   pull(): Promise<PullOutcome>;
   /** Push then pull, turning failures into a result the UI can render. */
   sync(): Promise<SyncRunResult>;
+  /**
+   * Fires after a local save, a push or a pull. Screens use it to re-read the
+   * phone database instead of polling it.
+   */
+  subscribe(listener: () => void): () => void;
   /** Repeats `sync` while the app is open. Returns a stop function. */
   startLoop(options: {
     intervalMs?: number;
@@ -93,6 +98,22 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
   const pullLimit = Math.min(options.pullLimit ?? 100, MAX_PULL_LIMIT);
   const maxPullPages = options.maxPullPages ?? 20;
 
+  /**
+   * Change notification. Dexie has no cross-tab change feed that is cheap
+   * enough for every table, so the client owns the signal: it knows exactly
+   * when it wrote something.
+   */
+  const listeners = new Set<() => void>();
+  function notify(): void {
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch {
+        // A broken screen must not stop the other screens from refreshing.
+      }
+    }
+  }
+
   async function readCursor(): Promise<string> {
     const entry = await db.meta.get('cursor');
     return entry?.value ?? '0';
@@ -106,7 +127,9 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
     const key = recordKey(table, id);
     const timestamp = now().toISOString();
 
-    await db.transaction('rw', db.records, db.outbox, async () => {
+    await db.transaction('rw', db.records, db.outbox, db.meta, async () => {
+      const sequence = Number((await db.meta.get('outboxSeq'))?.value ?? '0') + 1;
+      await db.meta.put({ key: 'outboxSeq', value: String(sequence) });
       await db.records.put({
         key,
         table,
@@ -123,11 +146,13 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
         recordId: id,
         data,
         createdAt: timestamp,
+        order: sequence,
         attempts: 0,
         status: 'pending',
       });
     });
 
+    notify();
     return key;
   }
 
@@ -147,6 +172,13 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 
   async function push(): Promise<PushOutcome> {
     const queued = await db.outbox.where('status').equals('pending').sortBy('createdAt');
+    // Parents before children: a house before its batch, a stock item before
+    // its receipt. Falling back to creation time keeps old rows ordered.
+    queued.sort(
+      (left, right) =>
+        (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER) ||
+        left.createdAt.localeCompare(right.createdAt),
+    );
     const batch = queued.slice(0, maxPushRecords);
     const outcome = emptyPush();
     if (batch.length === 0) return outcome;
@@ -212,6 +244,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
       await db.meta.put({ key: 'lastPushAt', value: timestamp });
     });
 
+    notify();
     return outcome;
   }
 
@@ -237,6 +270,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
     }
 
     await db.meta.put({ key: 'lastPullAt', value: now().toISOString() });
+    notify();
     return { pulled, cursor };
   }
 
@@ -332,6 +366,10 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
     push,
     pull,
     sync,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     startLoop,
   };
 }
