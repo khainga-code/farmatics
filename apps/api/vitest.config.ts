@@ -8,6 +8,9 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
+    // Worker forks crash on Windows when PGlite's WASM heap is allocated;
+    // threads share the process and are stable here.
+    pool: 'threads',
     fileParallelism: false,
     testTimeout: 60_000,
     hookTimeout: 60_000,

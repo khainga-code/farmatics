@@ -11,7 +11,7 @@ import {
 } from '@farmatics/shared';
 import type { AccessClaims } from '../auth/tokens.js';
 import { badRequest } from '../errors.js';
-import { findEntity, syncedEntityNames } from './entities.js';
+import { findEntity, SyncValidationError, syncedEntityNames } from './entities.js';
 
 /**
  * Push and pull.
@@ -134,6 +134,21 @@ export function createSyncService(deps: { db: DatabaseContext }): SyncService {
           continue;
         }
 
+        // The phone's copy of the permissions is a convenience. This is the
+        // check that actually decides whether the write happens. An entity
+        // with no permission list is available to every signed-in member.
+        const allowed = entity.permissionsFor(parsed.data);
+        if (allowed.length > 0 && !allowed.some((permission) => claims.perms.includes(permission))) {
+          results.push({
+            table: record.table,
+            id: record.id,
+            status: 'rejected',
+            reason: 'forbidden',
+            message: 'You do not have permission to record this.',
+          });
+          continue;
+        }
+
         try {
           const outcome = await withTenant(app, claims.farm, async (tx) => {
             const inserted = await entity.insert(
@@ -180,6 +195,17 @@ export function createSyncService(deps: { db: DatabaseContext }): SyncService {
             });
           }
         } catch (error) {
+          if (error instanceof SyncValidationError) {
+            results.push({
+              table: record.table,
+              id: record.id,
+              status: 'rejected',
+              reason: error.reason,
+              message: error.message,
+            });
+            continue;
+          }
+
           // A unique violation can still surface if the conflict target and
           // the insert race; anything else is a genuine failure worth
           // reporting per-record so the rest of the batch still lands.

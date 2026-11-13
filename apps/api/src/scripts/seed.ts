@@ -48,6 +48,51 @@ try {
           await hashSecret(tempPin),
         ],
       );
+
+      // A demo flock so the poultry and feed screens have something real to
+      // show on first sign-in. Arrival is 20 days ago: the second vaccination
+      // is due today and its reminder is already open.
+      const houseId = randomUUID();
+      const batchId = randomUUID();
+      const feedId = randomUUID();
+
+      await tx.query('insert into houses (id, farm_id, name, note) values ($1, $2, $3, $4)', [
+        houseId,
+        farmId,
+        'House 1',
+        'Demo brooder house',
+      ]);
+      await tx.query(
+        `insert into batches
+           (id, farm_id, house_id, code, breed, arrival_date, initial_count, note)
+         values ($1, $2, $3, $4, $5, current_date - 20, $6, $7)`,
+        [batchId, farmId, houseId, 'B-2026-01', 'Ross 308', 500, 'Demo batch'],
+      );
+      await tx.query(
+        `insert into stock_items (id, farm_id, name, category, unit, reorder_level_kg)
+         values ($1, $2, $3, 'feed', 'kg', $4)`,
+        [feedId, farmId, 'Growers mash', 100],
+      );
+      await tx.query(
+        `insert into stock_movements
+           (id, farm_id, stock_item_id, kind, quantity_kg, note, recorded_at, recorded_by)
+         values
+           ($1, $2, $3, 'receipt', 750, 'Opening delivery', now() - interval '20 days', $4),
+           ($5, $2, $3, 'issue', 120.5, 'First two weeks', now() - interval '6 days', $4)`,
+        [randomUUID(), farmId, feedId, ownerId, randomUUID()],
+      );
+      await tx.query(
+        `insert into mortality_events
+           (id, farm_id, batch_id, count, cause, recorded_at, recorded_by)
+         values ($1, $2, $3, 4, 'Heat stress', now() - interval '12 days', $4)`,
+        [randomUUID(), farmId, batchId, ownerId],
+      );
+      await tx.query(
+        `insert into vaccination_events
+           (id, farm_id, batch_id, day, note, recorded_at, recorded_by)
+         values ($1, $2, $3, 12, 'Gumboro', now() - interval '8 days', $4)`,
+        [randomUUID(), farmId, batchId, ownerId],
+      );
     });
 
     console.log('Demo farm created:');
