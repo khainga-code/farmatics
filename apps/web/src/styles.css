@@ -355,6 +355,12 @@ select.input {
   color: var(--green-900);
 }
 
+/* A net or margin figure: the number the owner actually reads. */
+.money--strong {
+  color: var(--green-700, #1f6b3b);
+  font-size: 20px;
+}
+
 .attention {
   display: grid;
   gap: 6px;

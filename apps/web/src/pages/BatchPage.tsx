@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   batchDay,
+  batchFinance,
   canSellOn,
   mortalityInputSchema,
   reminderIsDue,
@@ -22,6 +23,8 @@ import {
   feedUsedBy,
   onHandFor,
   toBatches,
+  toExpenseApprovals,
+  toExpenses,
   toHouses,
   toMortality,
   toSales,
@@ -32,6 +35,7 @@ import {
   useFarmData,
 } from '../local.js';
 import { syncClient } from '../offline.js';
+import { formatKes } from './FinancePage.js';
 import { formatDate } from './PoultryPage.js';
 
 type Action = 'mortality' | 'transfer' | 'sale' | 'vaccination' | 'feed' | null;
@@ -76,6 +80,12 @@ export function BatchPage() {
   const movements = toStockMovements(data.stock_movements);
 
   const balance = balanceFor(batch, mortality, sales, transfers);
+  const finance = batchFinance(
+    batch.id,
+    sales,
+    toExpenses(data.expenses),
+    toExpenseApprovals(data.expense_approvals),
+  );
   const today = toDateOnly(new Date());
   const day = Math.max(batchDay(batch.arrivalDate, today), 1);
   const sellable = canSellOn(batch.arrivalDate, today);
@@ -201,6 +211,44 @@ export function BatchPage() {
           )}
         </div>
       </section>
+
+      {can('view_finance') && (
+        <section className="card">
+          <div className="card-head">
+            <h2 className="card-title">Money for this batch</h2>
+            <Badge>KES</Badge>
+          </div>
+          <div className="card-body">
+            <div className="status-grid">
+              <div>
+                <div className="status-label">Revenue</div>
+                <div className="status-value">{formatKes(finance.revenueKes)}</div>
+              </div>
+              <div>
+                <div className="status-label">Direct costs</div>
+                <div className="status-value">{formatKes(finance.expensesKes)}</div>
+              </div>
+              <div>
+                <div className="status-label">Margin</div>
+                <div className="status-value money--strong">
+                  {formatKes(finance.marginKes)}
+                </div>
+              </div>
+            </div>
+            {finance.unpricedSales > 0 && (
+              <Alert tone="warning">
+                {finance.unpricedSales} sale
+                {finance.unpricedSales === 1 ? ' has' : 's have'} no price and{' '}
+                {finance.unpricedSales === 1 ? 'is' : 'are'} not counted in revenue.
+              </Alert>
+            )}
+            <p className="muted">
+              Direct costs are approved expenses tagged to this batch. Feed cost is not included
+              yet.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="card-head">
@@ -563,13 +611,22 @@ function SaleForm({
   onCancel,
   busy,
 }: {
-  onSave: (payload: { count: number; buyer?: string; note?: string }) => void;
+  onSave: (payload: {
+    count: number;
+    buyer?: string;
+    note?: string;
+    unitPriceKes?: number;
+  }) => void;
   onCancel: () => void;
   busy: boolean;
 }) {
   const [count, setCount] = useState('');
+  const [price, setPrice] = useState('');
   const [buyer, setBuyer] = useState('');
   const [note, setNote] = useState('');
+
+  const total = Number(count) * Number(price);
+  const showTotal = Number.isFinite(total) && total > 0;
 
   return (
     <FormShell title="Record sale" onCancel={onCancel}>
@@ -581,6 +638,7 @@ function SaleForm({
             count: Number(count),
             buyer: buyer.trim() || undefined,
             note: note.trim() || undefined,
+            unitPriceKes: price.trim() ? Number(price) : undefined,
           });
         }}
         noValidate
@@ -593,6 +651,16 @@ function SaleForm({
           value={count}
           onChange={(event) => setCount(event.target.value)}
           required
+        />
+        <Field
+          label="Price per bird (KES)"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          value={price}
+          onChange={(event) => setPrice(event.target.value)}
+          hint={showTotal ? `Total ${formatKes(total)}` : 'Leave empty only if the price is unknown.'}
         />
         <Field label="Buyer" value={buyer} onChange={(event) => setBuyer(event.target.value)} />
         <Field label="Note" value={note} onChange={(event) => setNote(event.target.value)} />

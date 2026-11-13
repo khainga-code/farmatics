@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  expenseState,
   reminderIsDue,
+  roundKes,
   roundKg,
+  saleRevenueKes,
+  sumKes,
   toDateOnly,
   vaccinationSchedule,
   type Role,
@@ -17,6 +21,8 @@ import {
   balanceFor,
   onHandFor,
   toBatches,
+  toExpenseApprovals,
+  toExpenses,
   toMortality,
   toSales,
   toStockItems,
@@ -25,6 +31,7 @@ import {
   toVaccinations,
   useFarmData,
 } from '../local.js';
+import { formatKes } from './FinancePage.js';
 
 const ROLE_LABELS: Record<Role, string> = {
   owner: 'Farm owner',
@@ -70,6 +77,34 @@ export function DashboardPage() {
       ).length
     );
   }, 0);
+
+  // Money is derived the same way as bird counts: priced sales in, approved
+  // expenses out. Nothing reads a stored balance.
+  const expenses = toExpenses(data.expenses);
+  const approvals = toExpenseApprovals(data.expense_approvals);
+  const month = today.slice(0, 7);
+  const monthRevenue = sumKes(
+    sales
+      .filter((sale) => sale.recordedAt.slice(0, 7) === month)
+      .map((sale) => saleRevenueKes(sale))
+      .filter((value): value is number => value !== null),
+  );
+  const monthSpend = sumKes(
+    expenses
+      .filter(
+        (expense) =>
+          expense.recordedAt.slice(0, 7) === month &&
+          expenseState(expense.id, approvals) === 'approved',
+      )
+      .map((expense) => expense.amountKes),
+  );
+  const monthNet = roundKes(monthRevenue - monthSpend);
+  const pendingExpenses = expenses.filter(
+    (expense) => expenseState(expense.id, approvals) === 'pending',
+  ).length;
+
+  const canSeeFinance =
+    permissions.includes('view_finance') || permissions.includes('record_expense');
 
   const [employees, setEmployees] = useState<UserDto[]>([]);
   const [listError, setListError] = useState<string | null>(null);
@@ -192,6 +227,36 @@ export function DashboardPage() {
             </div>
           </div>
         </section>
+
+        {canSeeFinance && (
+          <section className="card">
+            <div className="card-head">
+              <h2 className="card-title">Money this month</h2>
+              <Link to="/finance">Open finance</Link>
+            </div>
+            <div className="card-body">
+              <div className="status-grid">
+                <div>
+                  <div className="status-label">In from sales</div>
+                  <div className="status-value">{formatKes(monthRevenue)}</div>
+                </div>
+                <div>
+                  <div className="status-label">Out on expenses</div>
+                  <div className="status-value">{formatKes(monthSpend)}</div>
+                </div>
+                <div>
+                  <div className="status-label">Net</div>
+                  <div className="status-value money--strong">{formatKes(monthNet)}</div>
+                </div>
+              </div>
+              <p className="muted">
+                Only approved expenses are counted, and sales without a price are left out.
+                {pendingExpenses > 0 &&
+                  ` ${pendingExpenses} expense${pendingExpenses === 1 ? ' is' : 's are'} still waiting for a decision.`}
+              </p>
+            </div>
+          </section>
+        )}
 
         <section className="card">
           <div className="card-head">

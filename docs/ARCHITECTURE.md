@@ -85,11 +85,14 @@ the other.
 `probes` remains as a development entity and is still used by the sync card's
 test button. The real modules use the same path: `houses`, `batches`,
 `mortality_events`, `bird_transfers`, `bird_sales`, `vaccination_events`,
-`stock_items` and `stock_movements`. Each entity in
-`apps/api/src/sync/entities.ts` validates its own fields, declares the
+`stock_items`, `stock_movements`, `expenses` and `expense_approvals`. Each
+entity in `apps/api/src/sync/entities.ts` validates its own fields, declares the
 permissions that may write it, and re-checks business rules inside the same
-tenant transaction - for example that a sale is on or after day 22, or that a
-mortality record cannot take a batch below zero birds.
+tenant transaction - for example that a sale is on or after day 22, that a
+mortality record cannot take a batch below zero birds, or that an expense has
+only one approval. An approval is its own append-only record rather than a flag
+on the expense, so the expense an offline phone pushed is never edited beneath
+it.
 
 The phone's outbox carries a monotonic `order`, so a house is pushed before the
 batch that points at it even when both were created offline minutes apart.
@@ -151,11 +154,12 @@ Neon or any Postgres. Nothing above the driver layer changes.
 
 | Layer | Where | Covers |
 | --- | --- | --- |
-| Shared rules | `packages/shared/test` | Phone normalisation, permission resolution, wire schemas, batch day math, sale gate, vaccination schedule, balances |
+| Shared rules | `packages/shared/test` | Phone normalisation, permission resolution, wire schemas, batch day math, sale gate, vaccination schedule, balances, money rounding and approval state |
 | Database | `packages/db/test` | RLS across tenants, change sequence ordering, SQL splitting |
 | Offline engine | `packages/sync/test` | Atomic save, outbox ordering, push and pull, retry, lock and unlock |
 | API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts |
 | Poultry and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate, vaccinations, transfers, stock in kg, tenant boundaries |
+| Finance | `apps/api/test/finance.test.ts` | Expense permissions, one decision per expense, priced and unpriced sales, tenant boundaries |
 | Two phones | `apps/api/test/two-phone.test.ts` | Both phones offline, both write, both reconnect |
 
 API tests drive the real Fastify app against an in-memory Postgres, so routes,

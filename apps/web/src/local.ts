@@ -3,6 +3,8 @@ import type { LocalRecord } from '@farmatics/sync';
 import {
   batchCounts,
   stockOnHand,
+  type ExpenseCategory,
+  type ExpenseMethod,
   type StockMovementKind,
 } from '@farmatics/shared';
 import { syncClient } from './offline.js';
@@ -25,6 +27,8 @@ const TABLES = [
   'vaccination_events',
   'stock_items',
   'stock_movements',
+  'expenses',
+  'expense_approvals',
 ] as const;
 
 export type TableName = (typeof TABLES)[number];
@@ -41,6 +45,8 @@ function emptyFarmData(): FarmData {
     vaccination_events: [],
     stock_items: [],
     stock_movements: [],
+    expenses: [],
+    expense_approvals: [],
   };
 }
 
@@ -125,6 +131,7 @@ export interface BirdSale extends EventBase {
   count: number;
   buyer: string | null;
   note: string | null;
+  unitPriceKes: number | null;
 }
 
 export interface VaccinationEvent extends EventBase {
@@ -203,6 +210,10 @@ export function toSales(records: LocalRecord[]): BirdSale[] {
     count: count(record.data['count']),
     buyer: maybeText(record.data['buyer']),
     note: maybeText(record.data['note']),
+    unitPriceKes:
+      record.data['unitPriceKes'] === null || record.data['unitPriceKes'] === undefined
+        ? null
+        : count(record.data['unitPriceKes']),
     recordedAt: text(record.data['recordedAt']),
     dirty: record.dirty,
   }));
@@ -240,6 +251,46 @@ export function toStockMovements(records: LocalRecord[]): StockMovement[] {
     kind: text(record.data['kind']) as StockMovementKind,
     quantityKg: count(record.data['quantityKg']),
     batchId: maybeText(record.data['batchId']),
+    note: maybeText(record.data['note']),
+    recordedAt: text(record.data['recordedAt']),
+    dirty: record.dirty,
+  }));
+}
+
+export interface Expense extends EventBase {
+  category: ExpenseCategory;
+  amountKes: number;
+  paidTo: string | null;
+  method: ExpenseMethod;
+  batchId: string | null;
+  note: string | null;
+}
+
+export interface ExpenseApproval extends EventBase {
+  expenseId: string;
+  decision: 'approved' | 'rejected';
+  note: string | null;
+}
+
+export function toExpenses(records: LocalRecord[]): Expense[] {
+  return records.map((record) => ({
+    id: record.id,
+    category: (text(record.data['category']) || 'other') as ExpenseCategory,
+    amountKes: count(record.data['amountKes']),
+    paidTo: maybeText(record.data['paidTo']),
+    method: (text(record.data['method']) || 'cash') as ExpenseMethod,
+    batchId: maybeText(record.data['batchId']),
+    note: maybeText(record.data['note']),
+    recordedAt: text(record.data['recordedAt']),
+    dirty: record.dirty,
+  }));
+}
+
+export function toExpenseApprovals(records: LocalRecord[]): ExpenseApproval[] {
+  return records.map((record) => ({
+    id: record.id,
+    expenseId: text(record.data['expenseId']),
+    decision: text(record.data['decision']) === 'rejected' ? 'rejected' : 'approved',
     note: maybeText(record.data['note']),
     recordedAt: text(record.data['recordedAt']),
     dirty: record.dirty,

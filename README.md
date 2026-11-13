@@ -6,10 +6,11 @@ they reconnect.
 
 ## Status
 
-**Phase 1 foundation complete. Phase 2 poultry and feed built.** Accounts,
-roles, devices, the sync engine and offline PIN unlock work end to end. Poultry
-batches, mortality, transfers, sales, vaccinations and the feed store now sit on
-that foundation.
+**Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
+built.** Accounts, roles, devices, the sync engine and offline PIN unlock work
+end to end. Poultry batches, mortality, transfers, sales, vaccinations and the
+feed store now sit on that foundation, with a cash book for sales revenue,
+expenses and approvals.
 
 | Area | State |
 | --- | --- |
@@ -24,7 +25,8 @@ that foundation.
 | Poultry batches, mortality, transfers, sales | Working, tested |
 | Vaccination schedule and reminders | Working |
 | Feed store in kilograms | Working, tested |
-| Salesperson allocation, finance | Not started |
+| Cash book: priced sales, expenses, approvals | Working, tested in shared; API tests written |
+| Salesperson allocation | Not started |
 
 ## Offline behaviour
 
@@ -50,6 +52,19 @@ issues - so two phones cannot disagree about a balance. A sale is judged by the
 day it happened, not by the day the phone reconnects.
 
 The full rule set is in [`docs/PHASE-2.md`](./docs/PHASE-2.md).
+
+## Finance
+
+The farm keeps a cash book. A sale carries the price it was sold at, an expense
+carries the amount that was paid, and the owner or farm manager approves it.
+Revenue, spend and a batch's margin are derived from those events; no table
+stores a running balance.
+
+An unpriced sale is reported as unpriced rather than counted as zero, and only
+approved expenses reduce a batch's margin. Feed cost is not included in batch
+margin yet, because feed is recorded in kilograms rather than shillings.
+
+The full rule set is in [`docs/PHASE-3.md`](./docs/PHASE-3.md).
 
 ## Requirements
 
@@ -80,6 +95,8 @@ Seeded accounts:
 The seed also creates a demo house, a batch that arrived twenty days ago, and
 750 kg of feed, so the poultry and store screens have real data on first
 sign-in. The second vaccination is due on that batch, and its reminder is open.
+Two demo expenses are created too: one approved for chicks and one transport
+cost still waiting for a decision.
 
 In development the six-digit sign-up code is returned by the API and shown on
 the verify screen, so no SMS provider is needed.
@@ -107,13 +124,14 @@ apps/
   api/        Fastify API, auth, validation, sync push and pull
   web/        React + TypeScript app, installable as a PWA
 packages/
-  shared/     Zod schemas, DTOs, permissions, sync wire contract, poultry rules
+  shared/     Zod schemas, DTOs, permissions, sync wire contract, poultry and finance rules
   db/         Schema, migrations, database drivers, tenant helpers
   sync/       Dexie stores, outbox, sync client, offline session and PIN verifier
 docs/
   ARCHITECTURE.md   How the pieces fit and why
   PHASE-1.md        Foundation: what is built, what is stubbed
   PHASE-2.md        Poultry and feed: rules, entities, screens, rejections
+  PHASE-3.md        Finance: cash book, approvals, batch margin
 ```
 
 ## Configuration

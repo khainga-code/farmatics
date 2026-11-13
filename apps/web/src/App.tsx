@@ -4,6 +4,7 @@ import { useAuth } from './auth.js';
 import { LockScreen } from './components/LockScreen.js';
 import { BatchPage } from './pages/BatchPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
+import { FinancePage } from './pages/FinancePage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { PoultryPage } from './pages/PoultryPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
@@ -66,6 +67,14 @@ export function App() {
         element={
           <RequireAuth>
             <StorePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/finance"
+        element={
+          <RequireAuth>
+            <FinancePage />
           </RequireAuth>
         }
       />
