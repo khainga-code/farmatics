@@ -91,8 +91,8 @@ Walked through in a browser against the running app:
 | --- | --- | --- |
 | SMS delivery | Stub logs the code; the API returns it in development | Real registration |
 | Africa's Talking sender | Written, untested until credentials exist | Production |
-| Sync entities | Only the throwaway `probes` entity exists | The real modules |
-| Reports, modules | Not started | Phases 2–5 |
+| Sync entities | Poultry and feed entities are live; `probes` remains for the dev harness | The remaining modules |
+| Reports, modules | Poultry and feed built in Phase 2 | Phases 3–5 |
 
 ## Decisions I made that the client should confirm
 

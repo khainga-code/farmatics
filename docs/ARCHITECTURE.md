@@ -82,8 +82,17 @@ Each device keeps its own cursor in `device_sync_state`. Two phones therefore
 pull independently, and a phone that has been away for a week does not affect
 the other.
 
-`probes` is a throwaway entity used to prove the engine. The module tables will
-replace it, one at a time, using the same push and pull path.
+`probes` remains as a development entity and is still used by the sync card's
+test button. The real modules use the same path: `houses`, `batches`,
+`mortality_events`, `bird_transfers`, `bird_sales`, `vaccination_events`,
+`stock_items` and `stock_movements`. Each entity in
+`apps/api/src/sync/entities.ts` validates its own fields, declares the
+permissions that may write it, and re-checks business rules inside the same
+tenant transaction - for example that a sale is on or after day 22, or that a
+mortality record cannot take a batch below zero birds.
+
+The phone's outbox carries a monotonic `order`, so a house is pushed before the
+batch that points at it even when both were created offline minutes apart.
 
 ## Authentication
 
@@ -142,10 +151,11 @@ Neon or any Postgres. Nothing above the driver layer changes.
 
 | Layer | Where | Covers |
 | --- | --- | --- |
-| Shared rules | `packages/shared/test` | Phone normalisation, permission resolution, wire schemas |
+| Shared rules | `packages/shared/test` | Phone normalisation, permission resolution, wire schemas, batch day math, sale gate, vaccination schedule, balances |
 | Database | `packages/db/test` | RLS across tenants, change sequence ordering, SQL splitting |
-| Offline engine | `packages/sync/test` | Atomic save, outbox, push and pull, retry, lock and unlock |
+| Offline engine | `packages/sync/test` | Atomic save, outbox ordering, push and pull, retry, lock and unlock |
 | API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts |
+| Poultry and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate, vaccinations, transfers, stock in kg, tenant boundaries |
 | Two phones | `apps/api/test/two-phone.test.ts` | Both phones offline, both write, both reconnect |
 
 API tests drive the real Fastify app against an in-memory Postgres, so routes,

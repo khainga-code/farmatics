@@ -6,9 +6,10 @@ they reconnect.
 
 ## Status
 
-**Phase 1 foundation complete.** Accounts, roles, devices, the sync engine and
-offline PIN unlock work end to end. The next phase builds the farm modules on
-top of this base.
+**Phase 1 foundation complete. Phase 2 poultry and feed built.** Accounts,
+roles, devices, the sync engine and offline PIN unlock work end to end. Poultry
+batches, mortality, transfers, sales, vaccinations and the feed store now sit on
+that foundation.
 
 | Area | State |
 | --- | --- |
@@ -20,7 +21,10 @@ top of this base.
 | Sync engine (outbox push, pull by cursor) | Working, tested on two phones |
 | Offline PIN unlock and offline day limit | Working |
 | Installable PWA with app-shell cache | Working |
-| Module screens (poultry, store, sales, finance) | Not started |
+| Poultry batches, mortality, transfers, sales | Working, tested |
+| Vaccination schedule and reminders | Working |
+| Feed store in kilograms | Working, tested |
+| Salesperson allocation, finance | Not started |
 
 ## Offline behaviour
 
@@ -33,6 +37,19 @@ With no signal the app opens from the saved session and asks for the PIN. It
 keeps working for fourteen offline days; after that it asks for a fresh sign-in.
 Writes recorded offline stay queued and are sent when the API is reachable
 again.
+
+## Poultry and feed
+
+Arrival is day 1. Brooding runs to day 21 and birds may be sold from day 22.
+Vaccinations fall on day 12 and day 21, with a reminder three days before each
+(day 9 and day 18). Feed is recorded in kilograms.
+
+Counts are never typed into a balance. Birds alive and feed on hand are derived
+from the events that changed them - mortality, transfers, sales, receipts and
+issues - so two phones cannot disagree about a balance. A sale is judged by the
+day it happened, not by the day the phone reconnects.
+
+The full rule set is in [`docs/PHASE-2.md`](./docs/PHASE-2.md).
 
 ## Requirements
 
@@ -60,6 +77,10 @@ Seeded accounts:
 | Owner | phone `0700 000 001` | `farmatics2026` |
 | Stock keeper | username `joseph` | temporary PIN printed by `pnpm seed` |
 
+The seed also creates a demo house, a batch that arrived twenty days ago, and
+750 kg of feed, so the poultry and store screens have real data on first
+sign-in. The second vaccination is due on that batch, and its reminder is open.
+
 In development the six-digit sign-up code is returned by the API and shown on
 the verify screen, so no SMS provider is needed.
 
@@ -86,12 +107,13 @@ apps/
   api/        Fastify API, auth, validation, sync push and pull
   web/        React + TypeScript app, installable as a PWA
 packages/
-  shared/     Zod schemas, DTOs, permissions, sync wire contract, phone rules
+  shared/     Zod schemas, DTOs, permissions, sync wire contract, poultry rules
   db/         Schema, migrations, database drivers, tenant helpers
   sync/       Dexie stores, outbox, sync client, offline session and PIN verifier
 docs/
   ARCHITECTURE.md   How the pieces fit and why
-  PHASE-1.md        What is built, what is stubbed, what is next
+  PHASE-1.md        Foundation: what is built, what is stubbed
+  PHASE-2.md        Poultry and feed: rules, entities, screens, rejections
 ```
 
 ## Configuration
