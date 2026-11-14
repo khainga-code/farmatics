@@ -40,7 +40,8 @@ import {
   toVaccinations,
   useFarmData,
 } from '../local.js';
-import { syncClient } from '../offline.js';
+import { saveAndConfirm } from '../save.js';
+import { notify } from '../toast.js';
 import { formatKes } from './FinancePage.js';
 import { formatDate } from './PoultryPage.js';
 
@@ -180,18 +181,32 @@ export function BatchPage() {
       })),
   ].sort((left, right) => right.at.localeCompare(left.at));
 
-  async function save(table: string, payload: Record<string, unknown>) {
+  async function save(
+    table: string,
+    payload: Record<string, unknown>,
+    message: string,
+  ) {
     try {
-      await syncClient.saveRecord(table, crypto.randomUUID(), payload);
-      if (online) await syncClient.sync();
+      await saveAndConfirm(
+        [{ table, id: crypto.randomUUID(), data: payload }],
+        message,
+        online,
+      );
+      setError(null);
       setAction(null);
     } finally {
       setBusy(false);
     }
   }
 
+  function start(next: Exclude<Action, null>) {
+    setError(null);
+    setAction(next);
+  }
+
   function fail(message: string) {
     setError(message);
+    notify(message, 'error');
     setBusy(false);
   }
 
@@ -304,10 +319,7 @@ export function BatchPage() {
                     <div className="list-actions">
                       <Button
                         variant="ghost"
-                        onClick={() => {
-                          setError(null);
-                          setAction('vaccination');
-                        }}
+                        onClick={() => start('vaccination')}
                       >
                         Record
                       </Button>
@@ -327,26 +339,26 @@ export function BatchPage() {
         <div className="card-body">
           <div className="sync-actions">
             {can('record_mortality') && (
-              <Button variant="ghost" onClick={() => setAction('mortality')}>
+              <Button variant="ghost" onClick={() => start('mortality')}>
                 Mortality
               </Button>
             )}
             {can('record_transfer') && (
-              <Button variant="ghost" onClick={() => setAction('transfer')}>
+              <Button variant="ghost" onClick={() => start('transfer')}>
                 Transfer birds
               </Button>
             )}
             {can('record_sale') && (
               <Button
                 variant="ghost"
-                onClick={() => setAction('sale')}
+                onClick={() => start('sale')}
                 disabled={!sellable || (saleNeedsAllocation && saleAllocations.length === 0)}
               >
                 Record sale
               </Button>
             )}
             {(can('reserve_feed') || can('record_feeding')) && stockItems.length > 0 && (
-              <Button variant="ghost" onClick={() => setAction('feed')}>
+              <Button variant="ghost" onClick={() => start('feed')}>
                 Issue feed
               </Button>
             )}
@@ -363,7 +375,7 @@ export function BatchPage() {
                 if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the entry.');
                 setBusy(true);
                 try {
-                  await save('mortality_events', parsed.data);
+                  await save('mortality_events', parsed.data, 'Mortality recorded');
                 } catch {
                   fail('Could not save on this phone. Try again.');
                 }
@@ -385,7 +397,7 @@ export function BatchPage() {
                 if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the entry.');
                 setBusy(true);
                 try {
-                  await save('bird_transfers', parsed.data);
+                  await save('bird_transfers', parsed.data, 'Transfer recorded');
                 } catch {
                   fail('Could not save on this phone. Try again.');
                 }
@@ -407,7 +419,7 @@ export function BatchPage() {
                 if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the entry.');
                 setBusy(true);
                 try {
-                  await save('bird_sales', parsed.data);
+                  await save('bird_sales', parsed.data, 'Sale recorded');
                 } catch {
                   fail('Could not save on this phone. Try again.');
                 }
@@ -428,7 +440,7 @@ export function BatchPage() {
                 if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the entry.');
                 setBusy(true);
                 try {
-                  await save('vaccination_events', parsed.data);
+                  await save('vaccination_events', parsed.data, 'Vaccination recorded');
                 } catch {
                   fail('Could not save on this phone. Try again.');
                 }
@@ -453,7 +465,7 @@ export function BatchPage() {
                 if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the entry.');
                 setBusy(true);
                 try {
-                  await save('stock_movements', parsed.data);
+                  await save('stock_movements', parsed.data, 'Feed issued');
                 } catch {
                   fail('Could not save on this phone. Try again.');
                 }

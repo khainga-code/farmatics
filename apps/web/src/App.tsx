@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { Permission } from '@farmatics/shared';
 import { useAuth } from './auth.js';
 import { LockScreen } from './components/LockScreen.js';
+import { ToastHost } from './components/ToastHost.js';
 import { AccountPage } from './pages/AccountPage.js';
 import { BatchPage } from './pages/BatchPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
@@ -173,6 +174,7 @@ export function App() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ToastHost />
     </>
   );
 }

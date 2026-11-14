@@ -14,7 +14,8 @@ import {
   useFarmData,
   type StockItem,
 } from '../local.js';
-import { syncClient } from '../offline.js';
+import { saveAndConfirm } from '../save.js';
+import { notify } from '../toast.js';
 
 type Action = 'receive' | 'issue' | 'adjust' | 'new-item' | null;
 
@@ -40,10 +41,14 @@ export function StorePage() {
     setAction(next);
   }
 
-  async function save(table: string, payload: Record<string, unknown>) {
+  async function save(table: string, payload: Record<string, unknown>, message: string) {
     try {
-      await syncClient.saveRecord(table, crypto.randomUUID(), payload);
-      if (online) await syncClient.sync();
+      await saveAndConfirm(
+        [{ table, id: crypto.randomUUID(), data: payload }],
+        message,
+        online,
+      );
+      setError(null);
       setAction(null);
     } finally {
       setBusy(false);
@@ -52,6 +57,7 @@ export function StorePage() {
 
   function fail(message: string) {
     setError(message);
+    notify(message, 'error');
     setBusy(false);
   }
 
@@ -130,7 +136,7 @@ export function StorePage() {
             if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the details.');
             setBusy(true);
             try {
-              await save('stock_items', parsed.data);
+              await save('stock_items', parsed.data, 'Feed added');
             } catch {
               fail('Could not save on this phone. Try again.');
             }
@@ -155,7 +161,7 @@ export function StorePage() {
             if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the weight.');
             setBusy(true);
             try {
-              await save('stock_movements', parsed.data);
+              await save('stock_movements', parsed.data, 'Delivery received');
             } catch {
               fail('Could not save on this phone. Try again.');
             }
@@ -181,7 +187,7 @@ export function StorePage() {
             if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the weight.');
             setBusy(true);
             try {
-              await save('stock_movements', parsed.data);
+              await save('stock_movements', parsed.data, 'Feed issued');
             } catch {
               fail('Could not save on this phone. Try again.');
             }
@@ -208,7 +214,7 @@ export function StorePage() {
             if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the weight.');
             setBusy(true);
             try {
-              await save('stock_movements', parsed.data);
+              await save('stock_movements', parsed.data, 'Stock adjusted');
             } catch {
               fail('Could not save on this phone. Try again.');
             }

@@ -22,7 +22,8 @@ import {
   type Expense,
 } from '../local.js';
 import { dayMoney, monthMoney } from '../money.js';
-import { syncClient } from '../offline.js';
+import { saveAndConfirm } from '../save.js';
+import { notify } from '../toast.js';
 
 /**
  * The cash book.
@@ -67,14 +68,25 @@ export function FinancePage() {
     setError(null);
     setBusyId(expense.id);
     try {
-      await syncClient.saveRecord('expense_approvals', crypto.randomUUID(), {
-        expenseId: expense.id,
-        decision,
-        recordedAt: new Date().toISOString(),
-      });
-      if (online) await syncClient.sync();
+      await saveAndConfirm(
+        [
+          {
+            table: 'expense_approvals',
+            id: crypto.randomUUID(),
+            data: {
+              expenseId: expense.id,
+              decision,
+              recordedAt: new Date().toISOString(),
+            },
+          },
+        ],
+        decision === 'approved' ? 'Expense approved' : 'Expense rejected',
+        online,
+      );
     } catch {
-      setError('Could not save the decision on this phone. Try again.');
+      const text = 'Could not save the decision on this phone. Try again.';
+      setError(text);
+      notify(text, 'error');
     } finally {
       setBusyId(null);
     }
@@ -287,11 +299,16 @@ function ExpenseForm({
 
     setBusy(true);
     try {
-      await syncClient.saveRecord('expenses', crypto.randomUUID(), parsed.data);
-      if (online) await syncClient.sync();
+      await saveAndConfirm(
+        [{ table: 'expenses', id: crypto.randomUUID(), data: parsed.data }],
+        'Expense recorded',
+        online,
+      );
       onDone();
     } catch {
-      setError('Could not save the expense on this phone. Try again.');
+      const text = 'Could not save the expense on this phone. Try again.';
+      setError(text);
+      notify(text, 'error');
     } finally {
       setBusy(false);
     }

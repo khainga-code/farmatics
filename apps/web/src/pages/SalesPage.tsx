@@ -23,7 +23,8 @@ import {
   useFarmData,
   type SalesAllocation,
 } from '../local.js';
-import { syncClient } from '../offline.js';
+import { saveAndConfirm } from '../save.js';
+import { notify } from '../toast.js';
 import { formatKes } from './FinancePage.js';
 import { formatDate } from './PoultryPage.js';
 
@@ -120,24 +121,27 @@ export function SalesPage() {
     setAction(next);
   }
 
-  async function saveRecords(records: NewRecord[]) {
+  async function saveRecords(records: NewRecord[], message: string) {
     try {
-      await syncClient.saveRecords(records);
-      if (online) await syncClient.sync();
+      await saveAndConfirm(records, message, online);
+      setError(null);
       setAction(null);
     } catch {
-      setError('Could not save on this phone. Try again.');
+      const text = 'Could not save on this phone. Try again.';
+      setError(text);
+      notify(text, 'error');
     } finally {
       setBusy(false);
     }
   }
 
-  async function save(table: string, payload: Record<string, unknown>) {
-    await saveRecords([{ table, id: crypto.randomUUID(), data: payload }]);
+  async function save(table: string, payload: Record<string, unknown>, message: string) {
+    await saveRecords([{ table, id: crypto.randomUUID(), data: payload }], message);
   }
 
   function fail(message: string) {
     setError(message);
+    notify(message, 'error');
     setBusy(false);
   }
 
@@ -274,7 +278,12 @@ export function SalesPage() {
             }
 
             setBusy(true);
-            void saveRecords(records);
+            void saveRecords(
+              records,
+              payload.feedKg !== undefined
+                ? 'Birds and feed allocated'
+                : 'Birds allocated',
+            );
           }}
         />
       )}
@@ -294,7 +303,7 @@ export function SalesPage() {
               return fail(parsed.error.issues[0]?.message ?? 'Check the sale.');
             }
             setBusy(true);
-            void save('bird_sales', parsed.data);
+            void save('bird_sales', parsed.data, 'Sale recorded');
           }}
         />
       )}
@@ -314,7 +323,7 @@ export function SalesPage() {
               return fail(parsed.error.issues[0]?.message ?? 'Check the return.');
             }
             setBusy(true);
-            void save('bird_returns', parsed.data);
+            void save('bird_returns', parsed.data, 'Birds returned');
           }}
         />
       )}

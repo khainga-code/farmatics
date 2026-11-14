@@ -11,6 +11,7 @@ import {
   vaccinationSchedule,
   vaccinationState,
 } from '@farmatics/shared';
+import type { NewRecord } from '@farmatics/sync';
 import { useAuth } from '../auth.js';
 import { AppLayout } from '../components/AppLayout.js';
 import { Alert, Badge, Button, Field } from '../components/ui.js';
@@ -24,7 +25,8 @@ import {
   toVaccinations,
   useFarmData,
 } from '../local.js';
-import { syncClient } from '../offline.js';
+import { saveAndConfirm } from '../save.js';
+import { notify } from '../toast.js';
 
 export function formatDate(dateOnly: string): string {
   if (!dateOnly) return '';
@@ -204,6 +206,7 @@ function NewBatchCard({
     setBusy(true);
     try {
       let houseId = form.houseId;
+      const records: NewRecord[] = [];
 
       if (form.newHouse.trim()) {
         const house = houseInputSchema.safeParse({ name: form.newHouse });
@@ -212,7 +215,7 @@ function NewBatchCard({
           return;
         }
         houseId = crypto.randomUUID();
-        await syncClient.saveRecord('houses', houseId, house.data);
+        records.push({ table: 'houses', id: houseId, data: house.data });
       }
 
       if (!houseId) {
@@ -232,11 +235,13 @@ function NewBatchCard({
         return;
       }
 
-      await syncClient.saveRecord('batches', crypto.randomUUID(), parsed.data);
-      if (online) await syncClient.sync();
+      records.push({ table: 'batches', id: crypto.randomUUID(), data: parsed.data });
+      await saveAndConfirm(records, 'Batch saved', online);
       onDone();
     } catch {
-      setError('Could not save the batch on this phone. Try again.');
+      const text = 'Could not save the batch on this phone. Try again.';
+      setError(text);
+      notify(text, 'error');
     } finally {
       setBusy(false);
     }

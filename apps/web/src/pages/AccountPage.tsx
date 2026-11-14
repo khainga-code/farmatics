@@ -6,6 +6,7 @@ import { AppLayout } from '../components/AppLayout.js';
 import { Alert, Badge, Button, ConfirmButton, Field } from '../components/ui.js';
 import { SyncCard } from '../components/SyncCard.js';
 import { ASSIGNABLE_ROLES, initialsOf, permissionLabel, ROLE_LABELS } from '../labels.js';
+import { notify } from '../toast.js';
 
 /**
  * Everything about the person and this phone, kept off the dashboard so the
@@ -74,8 +75,12 @@ export function AccountPage() {
       setEmployees((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
+      notify(updated.status === 'active' ? 'Employee reactivated' : 'Employee suspended');
     } catch (caught) {
-      setListError(caught instanceof ApiError ? caught.message : 'Could not change the account.');
+      const text =
+        caught instanceof ApiError ? caught.message : 'Could not change the account.';
+      setListError(text);
+      notify(text, 'error');
     }
   }
 
@@ -83,8 +88,11 @@ export function AccountPage() {
     try {
       await api.unlockEmployee(employee.id);
       setListError(null);
+      notify('Employee unlocked');
     } catch (caught) {
-      setListError(caught instanceof ApiError ? caught.message : 'Could not unlock the account.');
+      const text = caught instanceof ApiError ? caught.message : 'Could not unlock the account.';
+      setListError(text);
+      notify(text, 'error');
     }
   }
 
