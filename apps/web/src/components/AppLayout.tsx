@@ -1,22 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../auth.js';
+import { initialsOf } from '../labels.js';
+import { visibleNav } from '../nav.js';
 import { syncClient } from '../offline.js';
-import { Badge, Button } from './ui.js';
+import { NavIcon } from './icons.js';
 
 /**
- * The shell every signed-in screen shares: who you are, which module you are
- * in, and whether this phone still owes the server any work.
+ * The shell every signed-in screen shares: where you are, which modules you
+ * can open, whether this phone still owes the server any work, and the way
+ * back to the account screen. On a phone the modules sit in a thumb-reachable
+ * tab bar; on a wide screen they stay as tabs under the heading.
  */
-
-const NAV = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/poultry', label: 'Poultry', end: false },
-  { to: '/health', label: 'Health', end: false },
-  { to: '/store', label: 'Feed store', end: false },
-  { to: '/sales', label: 'Sales', end: false },
-  { to: '/finance', label: 'Finance', end: false },
-];
 
 export function AppLayout({
   title,
@@ -29,7 +24,7 @@ export function AppLayout({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { user, farm, online, permissions, signOut } = useAuth();
+  const { user, farm, online, permissions } = useAuth();
   const [pending, setPending] = useState(0);
 
   useEffect(() => {
@@ -55,22 +50,14 @@ export function AppLayout({
     };
   }, [user, online]);
 
-  const canSeeHealth =
-    permissions.includes('record_mortality') || permissions.includes('view_reports');
-
-  const canSeeStore =
-    permissions.includes('manage_setup') ||
-    permissions.includes('receive_stock') ||
-    permissions.includes('reserve_feed') ||
-    permissions.includes('record_feeding');
-
-  const canSeeSales =
-    permissions.includes('allocate_stock') ||
-    permissions.includes('record_sale') ||
-    permissions.includes('record_return');
-
-  const canSeeFinance =
-    permissions.includes('view_finance') || permissions.includes('record_expense');
+  const modules = visibleNav(permissions);
+  const syncState = !online ? 'offline' : pending > 0 ? 'pending' : 'synced';
+  const syncLabel =
+    syncState === 'offline'
+      ? 'Offline'
+      : syncState === 'pending'
+        ? `${pending} to send`
+        : 'Synced';
 
   return (
     <div className="app-shell">
@@ -81,23 +68,28 @@ export function AppLayout({
           <p className="app-sub">{subtitle ?? (user ? `${user.name} · ${user.phone}` : '')}</p>
         </div>
         <div className="header-actions">
-          <Badge tone={online ? (pending > 0 ? 'amber' : 'green') : 'amber'}>
-            {online ? (pending > 0 ? `${pending} to send` : 'Synced') : 'Offline'}
-          </Badge>
-          <Button variant="ghost" onClick={() => void signOut()}>
-            Sign out
-          </Button>
+          <Link
+            to="/account"
+            className={`sync-pill sync-pill--${syncState}`}
+            aria-label={
+              syncState === 'offline'
+                ? 'Offline. Work is saved on this phone. Open account and sync'
+                : syncState === 'pending'
+                  ? `${pending} record${pending === 1 ? '' : 's'} waiting to send. Open account and sync`
+                  : 'Everything is synced. Open account and sync'
+            }
+          >
+            <span className="sync-dot" aria-hidden="true" />
+            <span className="sync-text">{syncLabel}</span>
+          </Link>
+          <Link to="/account" className="avatar" aria-label="Account and settings" title="Account">
+            {initialsOf(user?.name)}
+          </Link>
         </div>
       </header>
 
       <nav className="nav" aria-label="Modules">
-        {NAV.filter((item) => {
-          if (item.to === '/health') return canSeeHealth;
-          if (item.to === '/store') return canSeeStore;
-          if (item.to === '/sales') return canSeeSales;
-          if (item.to === '/finance') return canSeeFinance;
-          return true;
-        }).map((item) => (
+        {modules.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -112,6 +104,24 @@ export function AppLayout({
       {actions && <div className="page-actions">{actions}</div>}
 
       <main className="app-main">{children}</main>
+
+      <nav className="tabbar" aria-label="Modules">
+        {modules.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              isActive ? 'tabbar-link tabbar-link--active' : 'tabbar-link'
+            }
+          >
+            <span className="tabbar-icon">
+              <NavIcon name={item.icon} />
+            </span>
+            <span className="tabbar-label">{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

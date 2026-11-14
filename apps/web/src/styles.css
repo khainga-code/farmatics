@@ -470,6 +470,73 @@ select.input {
   font-size: 14px;
 }
 
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sync-pill:hover {
+  background: var(--green-50);
+  text-decoration: none;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green-600);
+  box-shadow: 0 0 0 3px var(--green-100);
+}
+
+.sync-pill--pending .sync-dot,
+.sync-pill--offline .sync-dot {
+  background: #c28a17;
+  box-shadow: 0 0 0 3px #fdf1d8;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--green-900);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.avatar:hover {
+  background: var(--green-700);
+  text-decoration: none;
+}
+
+.avatar--lg {
+  width: 48px;
+  height: 48px;
+  font-size: 15px;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .app-main {
   display: grid;
   gap: 16px;
@@ -613,6 +680,61 @@ select.input {
   border-bottom-color: var(--green-700);
 }
 
+/* The phone's module switcher. Hidden until the tabs no longer fit. */
+.tabbar {
+  display: none;
+}
+
+.tabbar-link {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 1px;
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.15;
+  text-decoration: none;
+}
+
+.tabbar-link:hover {
+  color: var(--green-900);
+  text-decoration: none;
+}
+
+.tabbar-link svg {
+  width: 22px;
+  height: 22px;
+}
+
+.tabbar-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  transition: background-color 120ms ease;
+}
+
+.tabbar-link--active {
+  color: var(--green-900);
+}
+
+.tabbar-link--active .tabbar-icon {
+  background: var(--green-100);
+}
+
+.tabbar-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .page-actions {
   display: flex;
   justify-content: flex-end;
@@ -652,11 +774,92 @@ a.btn {
   border-width: 3px;
 }
 
-@media (max-width: 560px) {
-  .app-header {
-    flex-direction: column;
+@media (max-width: 720px) {
+  .app-shell {
+    width: 100%;
+    padding: 0 14px calc(92px + env(safe-area-inset-bottom));
   }
 
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-direction: row;
+    align-items: center;
+    margin: 0 -14px 16px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+    background: rgba(247, 246, 242, 0.94);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .app-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .app-eyebrow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-title {
+    margin-top: 2px;
+    font-size: 20px;
+  }
+
+  .app-sub {
+    display: none;
+  }
+
+  .header-actions {
+    flex-wrap: nowrap;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    gap: 2px;
+    padding: 6px 6px calc(4px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgba(20, 40, 30, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .page-actions {
+    margin: -4px 0 14px;
+  }
+
+  .page-actions .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 400px) {
+  .sync-text {
+    display: none;
+  }
+
+  .sync-pill {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 560px) {
   .list-item {
     flex-direction: column;
     align-items: flex-start;

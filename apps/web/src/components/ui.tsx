@@ -1,4 +1,12 @@
-import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useState,
+  type ButtonHTMLAttributes,
+  type ComponentProps,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from 'react';
 
 export function Field({
   label,
@@ -68,6 +76,49 @@ export function Button({
       {loading && <span className="spinner" aria-hidden="true" />}
       {children}
     </button>
+  );
+}
+
+/**
+ * A destructive action that asks once, in place. The second tap is only
+ * accepted for a few seconds, so a stray touch cannot suspend an account.
+ */
+export function ConfirmButton({
+  children,
+  confirmLabel = 'Tap again to confirm',
+  onConfirm,
+  variant = 'ghost',
+  ...props
+}: Omit<ComponentProps<typeof Button>, 'onClick' | 'children' | 'variant'> & {
+  children: ReactNode;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  variant?: 'primary' | 'ghost' | 'danger';
+}) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+
+  return (
+    <Button
+      {...props}
+      type="button"
+      variant={armed ? 'danger' : variant}
+      onClick={() => {
+        if (!armed) {
+          setArmed(true);
+          return;
+        }
+        setArmed(false);
+        onConfirm();
+      }}
+    >
+      {armed ? confirmLabel : children}
+    </Button>
   );
 }
 

@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { Permission } from '@farmatics/shared';
 import { useAuth } from './auth.js';
 import { LockScreen } from './components/LockScreen.js';
+import { AccountPage } from './pages/AccountPage.js';
 import { BatchPage } from './pages/BatchPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { FinancePage } from './pages/FinancePage.js';
@@ -56,9 +57,20 @@ function RequirePermission({
   return <>{children}</>;
 }
 
+/** A new screen starts at its top, not wherever the last one was scrolled. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 export function App() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route
         path="/"
         element={
@@ -120,6 +132,14 @@ export function App() {
         }
       />
       <Route
+        path="/account"
+        element={
+          <RequireAuth>
+            <AccountPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/login"
         element={
           <PublicOnly>
@@ -152,6 +172,7 @@ export function App() {
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }
