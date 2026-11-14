@@ -496,16 +496,33 @@ describe('per-account throttling', () => {
   it('stops one number after its attempts, even from new IPs', async () => {
     const phone = nextPhone();
 
-    // The first attempt creates the pending farm; the next two are refused as
-    // already registered. All three count against the number.
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    // The first attempt creates the farm; the next two are refused as already
+    // registered. All three count against the number.
+    const first = await throttled.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: registration(phone),
+      remoteAddress: '10.10.0.1',
+    });
+    expect(first.statusCode).toBe(201);
+    const { devCode } = first.json() as { devCode: string };
+
+    const verified = await throttled.inject({
+      method: 'POST',
+      url: '/api/v1/auth/verify',
+      payload: { phone, code: devCode, deviceLabel: 'test phone' },
+      remoteAddress: '10.10.0.1',
+    });
+    expect(verified.statusCode).toBe(201);
+
+    for (let attempt = 1; attempt < 3; attempt += 1) {
       const response = await throttled.inject({
         method: 'POST',
         url: '/api/v1/auth/register',
         payload: registration(phone),
         remoteAddress: `10.10.0.${attempt + 1}`,
       });
-      expect(response.statusCode).toBe(attempt === 0 ? 201 : 409);
+      expect(response.statusCode).toBe(409);
     }
 
     const blocked = await throttled.inject({
