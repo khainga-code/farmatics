@@ -70,6 +70,12 @@ export interface SyncEntity {
   schema: z.ZodType<unknown>;
   /** Any one of these lets the caller write the record. */
   permissionsFor(data: unknown): Permission[];
+  /**
+   * Any one of these lets a pull include this table. Empty or absent means
+   * every signed-in member may read it. Finance tables set this so a phone
+   * without the permission never receives the rows at all.
+   */
+  readPermissions?: Permission[];
   insert(
     tx: Db,
     ctx: SyncEntityContext,
@@ -409,6 +415,7 @@ const mortalityEntity: SyncEntity = {
       batch_id: input.batchId,
       count: input.count,
       cause: input.cause ?? null,
+      cause_category: input.causeCategory ?? null,
       ...eventColumns(ctx, input),
     });
     if (!row) return null;
@@ -427,6 +434,7 @@ const mortalityEntity: SyncEntity = {
         batchId: row['batch_id'],
         count: num(row['count']),
         cause: row['cause'],
+        causeCategory: row['cause_category'],
         recordedAt: asIso(row['recorded_at']),
         recordedBy: row['recorded_by'],
         clientTime: asIso(row['client_time']),
@@ -716,6 +724,9 @@ const expenseEntity: SyncEntity = {
   table: 'expenses',
   schema: expenseInputSchema,
   permissionsFor: () => ['record_expense'],
+  // The cash book is read-only to the people who run the money. A stock
+  // keeper's phone never pulls these rows.
+  readPermissions: ['view_finance', 'record_expense'],
 
   async insert(tx, ctx, id, data) {
     const input = data as ExpenseInput;
@@ -760,6 +771,7 @@ const expenseApprovalEntity: SyncEntity = {
   table: 'expense_approvals',
   schema: expenseApprovalInputSchema,
   permissionsFor: () => ['approve_expense'],
+  readPermissions: ['view_finance', 'record_expense'],
 
   async insert(tx, ctx, id, data) {
     const input = data as ExpenseApprovalInput;

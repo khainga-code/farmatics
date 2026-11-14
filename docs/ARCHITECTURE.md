@@ -62,7 +62,12 @@ The cycle is push, then pull:
   original `change_seq`, so the record is only counted once.
 - **Pull** reads `where change_seq > cursor order by change_seq limit n + 1`.
   The extra row tells the client whether more work remains without a second
-  query. The cursor never moves backwards on an empty page.
+  query. The cursor never moves backwards on an empty page. A table may declare
+  `readPermissions`; when it does, the pull skips it for a caller who holds none
+  of them. The cash book uses this so expenses never reach a stock keeper's
+  phone. When a member's rights change, the client pushes outstanding work,
+  clears its records and cursor, and pulls the farm again with the new
+  permissions; the outbox is never dropped.
 
 The phone and the server share the wire contract in `packages/shared`, so a
 field cannot be renamed on one side only. `cursors` and `changeSeq` travel as
@@ -88,7 +93,8 @@ test button. The real modules use the same path: `houses`, `batches`,
 `bird_returns`, `vaccination_events`, `stock_items`, `stock_movements`,
 `expenses` and `expense_approvals`. Each
 entity in `apps/api/src/sync/entities.ts` validates its own fields, declares the
-permissions that may write it, and re-checks business rules inside the same
+permissions that may write it and, where needed, the permissions that may pull
+it, and re-checks business rules inside the same
 tenant transaction - for example that a sale is on or after day 22, that a
 mortality record cannot take a batch below zero birds, or that an expense has
 only one approval. An approval is its own append-only record rather than a flag
@@ -155,13 +161,14 @@ Neon or any Postgres. Nothing above the driver layer changes.
 
 | Layer | Where | Covers |
 | --- | --- | --- |
-| Shared rules | `packages/shared/test` | Phone normalisation, permission resolution, wire schemas, batch day math, sale gate, vaccination schedule, balances, money rounding and approval state |
-| Database | `packages/db/test` | RLS across tenants, change sequence ordering, SQL splitting |
-| Offline engine | `packages/sync/test` | Atomic save, outbox ordering, push and pull, retry, lock and unlock |
-| API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts |
+| Shared rules | `packages/shared/test` | Phone normalisation, permission resolution, wire schemas, batch day math, sale gate, vaccination schedule, balances, money rounding, approval state, mortality windows and vaccination compliance |
+| Database | `packages/db/test` | RLS across tenants, change sequence ordering, finance constraints, sale price checks, SQL splitting |
+| Offline engine | `packages/sync/test` | Atomic save, outbox ordering, push and pull, retry, permission-change reset, lock and unlock |
+| API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts, pull access by permission |
 | Poultry and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate, vaccinations, transfers, stock in kg, tenant boundaries |
 | Finance | `apps/api/test/finance.test.ts` | Expense permissions, one decision per expense, priced and unpriced sales, tenant boundaries |
 | Allocation | `apps/api/test/allocations.test.ts` | Own-allocation sales, walk-in sales, over-allocation, returns, feed issued with the birds, cross-farm ids |
+| Pull access | `apps/api/test/pull-access.test.ts` | Which roles receive expenses, approvals and sale prices |
 | Two phones | `apps/api/test/two-phone.test.ts` | Both phones offline, both write, both reconnect |
 
 API tests drive the real Fastify app against an in-memory Postgres, so routes,

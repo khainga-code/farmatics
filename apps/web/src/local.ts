@@ -7,6 +7,7 @@ import {
   type AllocationBalance,
   type ExpenseCategory,
   type ExpenseMethod,
+  type MortalityCauseCategory,
   type StockMovementKind,
 } from '@farmatics/shared';
 import { syncClient } from './offline.js';
@@ -123,6 +124,8 @@ export interface MortalityEvent extends EventBase {
   batchId: string;
   count: number;
   cause: string | null;
+  /** Null on rows recorded before categories existed. */
+  causeCategory: MortalityCauseCategory | null;
 }
 
 export interface BirdTransfer extends EventBase {
@@ -208,6 +211,7 @@ export function toMortality(records: LocalRecord[]): MortalityEvent[] {
     batchId: text(record.data['batchId']),
     count: count(record.data['count']),
     cause: maybeText(record.data['cause']),
+    causeCategory: (record.data['causeCategory'] ?? null) as MortalityCauseCategory | null,
     recordedAt: text(record.data['recordedAt']),
     dirty: record.dirty,
   }));

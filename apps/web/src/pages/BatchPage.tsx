@@ -1,6 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import {
+  MORTALITY_CAUSE_CATEGORIES,
+  MORTALITY_CAUSE_LABELS,
   batchDay,
   batchFinance,
   canSellOn,
@@ -14,6 +16,7 @@ import {
   vaccinationInputSchema,
   vaccinationSchedule,
   vaccinationState,
+  type MortalityCauseCategory,
 } from '@farmatics/shared';
 import { useAuth } from '../auth.js';
 import { AppLayout } from '../components/AppLayout.js';
@@ -121,7 +124,13 @@ export function BatchPage() {
         id: event.id,
         at: event.recordedAt,
         title: `Mortality: ${event.count} birds`,
-        detail: event.cause ?? 'No cause recorded',
+        detail:
+          [
+            event.causeCategory ? MORTALITY_CAUSE_LABELS[event.causeCategory] : null,
+            event.cause,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'No cause recorded',
         tone: 'red' as const,
       })),
     ...sales
@@ -527,12 +536,17 @@ function MortalityForm({
   onCancel,
   busy,
 }: {
-  onSave: (payload: { count: number; cause?: string }) => void;
+  onSave: (payload: {
+    count: number;
+    cause?: string;
+    causeCategory?: MortalityCauseCategory;
+  }) => void;
   onCancel: () => void;
   busy: boolean;
 }) {
   const [count, setCount] = useState('');
   const [cause, setCause] = useState('');
+  const [category, setCategory] = useState<MortalityCauseCategory | ''>('');
 
   return (
     <FormShell title="Record mortality" onCancel={onCancel}>
@@ -540,7 +554,11 @@ function MortalityForm({
         className="form form--inline"
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
-          onSave({ count: Number(count), cause: cause.trim() || undefined });
+          onSave({
+            count: Number(count),
+            cause: cause.trim() || undefined,
+            causeCategory: category || undefined,
+          });
         }}
         noValidate
       >
@@ -553,11 +571,31 @@ function MortalityForm({
           onChange={(event) => setCount(event.target.value)}
           required
         />
+        <div className="field">
+          <label className="field-label" htmlFor="mortality-category">
+            What happened
+          </label>
+          <select
+            id="mortality-category"
+            className="input"
+            value={category}
+            onChange={(event) =>
+              setCategory(event.target.value as MortalityCauseCategory | '')
+            }
+          >
+            <option value="">Not sure</option>
+            {MORTALITY_CAUSE_CATEGORIES.map((item) => (
+              <option key={item} value={item}>
+                {MORTALITY_CAUSE_LABELS[item]}
+              </option>
+            ))}
+          </select>
+        </div>
         <Field
-          label="Cause"
+          label="Detail (optional)"
           value={cause}
           onChange={(event) => setCause(event.target.value)}
-          placeholder="e.g. Heat"
+          placeholder="e.g. Gumboro suspected"
         />
         <Button type="submit" loading={busy}>
           Save

@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  expenseState,
   reminderIsDue,
-  roundKes,
   roundKg,
-  saleRevenueKes,
-  sumKes,
   toDateOnly,
   vaccinationSchedule,
   type Role,
@@ -35,6 +31,11 @@ import {
   toVaccinations,
   useFarmData,
 } from '../local.js';
+import {
+  canSeeFinance as canSeeFinanceFor,
+  monthMoney,
+  pendingExpenseCount,
+} from '../money.js';
 import { formatKes } from './FinancePage.js';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -100,29 +101,10 @@ export function DashboardPage() {
   // expenses out. Nothing reads a stored balance.
   const expenses = toExpenses(data.expenses);
   const approvals = toExpenseApprovals(data.expense_approvals);
-  const month = today.slice(0, 7);
-  const monthRevenue = sumKes(
-    sales
-      .filter((sale) => sale.recordedAt.slice(0, 7) === month)
-      .map((sale) => saleRevenueKes(sale))
-      .filter((value): value is number => value !== null),
-  );
-  const monthSpend = sumKes(
-    expenses
-      .filter(
-        (expense) =>
-          expense.recordedAt.slice(0, 7) === month &&
-          expenseState(expense.id, approvals) === 'approved',
-      )
-      .map((expense) => expense.amountKes),
-  );
-  const monthNet = roundKes(monthRevenue - monthSpend);
-  const pendingExpenses = expenses.filter(
-    (expense) => expenseState(expense.id, approvals) === 'pending',
-  ).length;
+  const month = monthMoney(sales, expenses, approvals, today);
+  const pendingExpenses = pendingExpenseCount(expenses, approvals);
 
-  const canSeeFinance =
-    permissions.includes('view_finance') || permissions.includes('record_expense');
+  const canSeeFinance = canSeeFinanceFor(permissions);
 
   const [employees, setEmployees] = useState<UserDto[]>([]);
   const [listError, setListError] = useState<string | null>(null);
@@ -286,15 +268,15 @@ export function DashboardPage() {
               <div className="status-grid">
                 <div>
                   <div className="status-label">In from sales</div>
-                  <div className="status-value">{formatKes(monthRevenue)}</div>
+                  <div className="status-value">{formatKes(month.revenueKes)}</div>
                 </div>
                 <div>
                   <div className="status-label">Out on expenses</div>
-                  <div className="status-value">{formatKes(monthSpend)}</div>
+                  <div className="status-value">{formatKes(month.spendKes)}</div>
                 </div>
                 <div>
                   <div className="status-label">Net</div>
-                  <div className="status-value money--strong">{formatKes(monthNet)}</div>
+                  <div className="status-value money--strong">{formatKes(month.netKes)}</div>
                 </div>
               </div>
               <p className="muted">

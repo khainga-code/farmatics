@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import type { Permission } from '@farmatics/shared';
 import { useAuth } from './auth.js';
 import { LockScreen } from './components/LockScreen.js';
 import { BatchPage } from './pages/BatchPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { FinancePage } from './pages/FinancePage.js';
+import { HealthPage } from './pages/HealthPage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { PoultryPage } from './pages/PoultryPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
@@ -36,6 +38,24 @@ function PublicOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * A hidden nav item is not a guard: someone can type the address. Screens that
+ * expose a restricted area refuse to open here as well.
+ */
+function RequirePermission({
+  anyOf,
+  children,
+}: {
+  anyOf: Permission[];
+  children: ReactNode;
+}) {
+  const { can } = useAuth();
+  if (!anyOf.some((permission) => can(permission))) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
 export function App() {
   return (
     <Routes>
@@ -64,6 +84,16 @@ export function App() {
         }
       />
       <Route
+        path="/health"
+        element={
+          <RequireAuth>
+            <RequirePermission anyOf={['record_mortality', 'view_reports']}>
+              <HealthPage />
+            </RequirePermission>
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/store"
         element={
           <RequireAuth>
@@ -83,7 +113,9 @@ export function App() {
         path="/finance"
         element={
           <RequireAuth>
-            <FinancePage />
+            <RequirePermission anyOf={['view_finance', 'record_expense']}>
+              <FinancePage />
+            </RequirePermission>
           </RequireAuth>
         }
       />

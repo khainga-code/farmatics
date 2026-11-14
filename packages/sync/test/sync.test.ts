@@ -172,6 +172,43 @@ describe('local writes and push', () => {
     expect(await db.records.count()).toBe(0);
   });
 
+  it('drops the farm copy and cursor on reset but keeps queued work', async () => {
+    const db = newDb();
+    const pulledId = randomUUID();
+    const pendingId = randomUUID();
+    const client = createSyncClient({
+      db,
+      transport: transport({
+        pull: async () => ({
+          changes: [
+            {
+              table: 'probes',
+              id: pulledId,
+              changeSeq: '7',
+              deletedAt: null,
+              data: { label: 'from the server', value: 3 },
+            },
+          ],
+          cursor: '7',
+          hasMore: false,
+          serverTime: new Date().toISOString(),
+        }),
+      }),
+    });
+
+    await client.pull();
+    expect(await client.getCursor()).toBe('7');
+    expect(await db.records.count()).toBe(1);
+
+    await client.saveRecord('probes', pendingId, { label: 'still mine', value: 4 });
+    await client.resetRecords();
+
+    expect(await client.getCursor()).toBe('0');
+    expect(await db.records.count()).toBe(0);
+    // The outbox survives, so a permission change never loses a field write.
+    expect(await client.pendingCount()).toBe(1);
+  });
+
   it('treats a duplicate as success, not as work still waiting', async () => {
     const db = newDb();
     const id = randomUUID();

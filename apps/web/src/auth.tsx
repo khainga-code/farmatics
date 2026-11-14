@@ -20,7 +20,7 @@ import {
   type UnlockResult,
 } from '@farmatics/sync';
 import { api, hasStoredSession } from './api.js';
-import { syncDb } from './offline.js';
+import { rebuildLocalCopyIfChanged, syncDb } from './offline.js';
 
 interface AuthState {
   user: UserDto | null;
@@ -171,6 +171,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applyProfile = useCallback(async (profile: AuthProfile) => {
+    // Compare against the session the phone was using, then rebuild its copy
+    // if the rights or the person changed. Queued work is pushed first.
+    await rebuildLocalCopyIfChanged(profile);
+
     setState({
       user: profile.user,
       farm: profile.farm,

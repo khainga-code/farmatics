@@ -11,6 +11,8 @@ const farmA = randomUUID();
 const farmB = randomUUID();
 const userA = randomUUID();
 const userB = randomUUID();
+const houseA = randomUUID();
+const batchA = randomUUID();
 
 beforeAll(async () => {
   db = createPgliteDb(':memory:');
@@ -24,6 +26,15 @@ beforeAll(async () => {
      values ($1, $2, 'Owner A', '+254700000001', 'owner'),
             ($3, $4, 'Owner B', '+254700000002', 'owner')`,
     [userA, farmA, userB, farmB],
+  );
+  await db.query(
+    `insert into houses (id, farm_id, name) values ($1, $2, 'House A')`,
+    [houseA, farmA],
+  );
+  await db.query(
+    `insert into batches (id, farm_id, house_id, code, arrival_date, initial_count)
+     values ($1, $2, $3, 'B-A', current_date - 30, 500)`,
+    [batchA, farmA, houseA],
   );
 }, 30_000);
 
@@ -127,6 +138,93 @@ describe('change sequence', () => {
     expect(new Date(after!.updated_at).getTime()).toBeGreaterThan(
       new Date(created!.updated_at).getTime(),
     );
+  });
+});
+
+describe('finance constraints', () => {
+  async function addExpense(values: {
+    amount?: number;
+    category?: string;
+    method?: string;
+    farmId?: string;
+    userId?: string;
+  } = {}) {
+    const id = randomUUID();
+    await db.query(
+      `insert into expenses (id, farm_id, category, amount_kes, method, recorded_at, recorded_by)
+       values ($1, $2, $3, $4, $5, now(), $6)`,
+      [
+        id,
+        values.farmId ?? farmA,
+        values.category ?? 'feed',
+        values.amount ?? 100,
+        values.method ?? 'cash',
+        values.userId ?? userA,
+      ],
+    );
+    return id;
+  }
+
+  it('refuses an expense of zero or a negative amount', async () => {
+    await expect(addExpense({ amount: 0 })).rejects.toThrow();
+    await expect(addExpense({ amount: -50 })).rejects.toThrow();
+  });
+
+  it('refuses an unknown category or payment method', async () => {
+    await expect(addExpense({ category: 'bribes' })).rejects.toThrow();
+    await expect(addExpense({ method: 'cheque' })).rejects.toThrow();
+  });
+
+  it('allows one live decision per expense, and frees the slot after a soft delete', async () => {
+    const expenseId = await addExpense();
+    const decision = (id: string) =>
+      db.query(
+        `insert into expense_approvals
+           (id, farm_id, expense_id, decision, recorded_at, recorded_by)
+         values ($1, $2, $3, 'approved', now(), $4)`,
+        [id, farmA, expenseId, userA],
+      );
+
+    const first = randomUUID();
+    await decision(first);
+    await expect(decision(randomUUID())).rejects.toThrow();
+
+    await db.query('update expense_approvals set deleted_at = now() where id = $1', [first]);
+    await expect(decision(randomUUID())).resolves.toBeDefined();
+  });
+
+  it('keeps expenses inside their farm', async () => {
+    await addExpense();
+    await addExpense({ farmId: farmB, userId: userB });
+
+    const visible = await asTenant(farmA, (tx) =>
+      tx.query<{ farm_id: string }>('select farm_id from expenses'),
+    );
+    expect(visible.length).toBeGreaterThan(0);
+    expect(visible.every((row) => row.farm_id === farmA)).toBe(true);
+
+    await expect(
+      asTenant(farmA, (tx) =>
+        tx.query(
+          `insert into expenses (farm_id, category, amount_kes, recorded_at, recorded_by)
+           values ($1, 'feed', 10, now(), $2)`,
+          [farmB, userA],
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('refuses a negative sale price but accepts an unpriced sale', async () => {
+    const sale = (price: number | null) =>
+      db.query(
+        `insert into bird_sales
+           (id, farm_id, batch_id, count, unit_price_kes, recorded_at, recorded_by)
+         values ($1, $2, $3, 2, $4, now(), $5)`,
+        [randomUUID(), farmA, batchA, price, userA],
+      );
+
+    await expect(sale(-1)).rejects.toThrow();
+    await expect(sale(null)).resolves.toBeDefined();
   });
 });
 

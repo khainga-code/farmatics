@@ -23,6 +23,29 @@ export const VACCINATION_DAYS = [12, 21] as const;
 export const VACCINATION_REMINDER_DAYS_BEFORE = 3;
 export const FEED_UNIT = 'kg';
 
+/** Categories the owner picks from when recording a death. */
+export const MORTALITY_CAUSE_CATEGORIES = [
+  'disease',
+  'heat',
+  'cold',
+  'predator',
+  'injury',
+  'culling',
+  'unknown',
+] as const;
+
+export type MortalityCauseCategory = (typeof MORTALITY_CAUSE_CATEGORIES)[number];
+
+export const MORTALITY_CAUSE_LABELS: Record<MortalityCauseCategory, string> = {
+  disease: 'Disease',
+  heat: 'Heat',
+  cold: 'Cold',
+  predator: 'Predator',
+  injury: 'Injury',
+  culling: 'Culling',
+  unknown: 'Not sure',
+};
+
 export function toDateOnly(value: string | Date): string {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = value instanceof Date ? value : new Date(value);
@@ -177,6 +200,8 @@ export const mortalityInputSchema = z.object({
   batchId: uuid,
   count: z.number().int().min(1, 'Enter at least one bird.').max(1_000_000),
   cause: trimmed(0, 120, 'Keep the cause under 120 characters.').optional(),
+  /** What kind of death it was. Older records have none. */
+  causeCategory: z.enum(MORTALITY_CAUSE_CATEGORIES).optional(),
   recordedAt: isoTimestampSchema,
   clientTime: isoTimestampSchema.optional(),
 });

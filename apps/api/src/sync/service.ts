@@ -246,6 +246,13 @@ export function createSyncService(deps: { db: DatabaseContext }): SyncService {
 
         for (const table of syncedEntityNames()) {
           const entity = findEntity(table)!;
+          // Some tables - the cash book - are not for every phone. Skipping
+          // them here is what keeps finance off a stock keeper's device; the
+          // route guard is only a second line.
+          const read = entity.readPermissions ?? [];
+          if (read.length > 0 && !read.some((permission) => claims.perms.includes(permission))) {
+            continue;
+          }
           const rows = await tx.query<Record<string, unknown>>(
             `select * from ${table}
               where farm_id = $1 and change_seq > $2

@@ -6,9 +6,6 @@ import {
   EXPENSE_METHOD_LABELS,
   expenseInputSchema,
   expenseState,
-  roundKes,
-  saleRevenueKes,
-  sumKes,
   toDateOnly,
   type ExpenseCategory,
   type ExpenseMethod,
@@ -24,6 +21,7 @@ import {
   useFarmData,
   type Expense,
 } from '../local.js';
+import { dayMoney, monthMoney } from '../money.js';
 import { syncClient } from '../offline.js';
 
 /**
@@ -52,34 +50,18 @@ export function FinancePage() {
   const canApprove = can('approve_expense');
 
   const today = toDateOnly(new Date());
-  const month = today.slice(0, 7);
-  const isApproved = (id: string) => expenseState(id, approvals) === 'approved';
+  const month = monthMoney(sales, expenses, approvals, today);
+  const day = dayMoney(sales, expenses, approvals, today);
+  const monthRevenue = month.revenueKes;
+  const monthSpend = month.spendKes;
+  const monthNet = month.netKes;
+  const todayRevenue = day.revenueKes;
+  const todaySpend = day.spendKes;
 
-  const monthSales = sales.filter((sale) => sale.recordedAt.slice(0, 7) === month);
-  const monthExpenses = expenses.filter(
-    (expense) => expense.recordedAt.slice(0, 7) === month && isApproved(expense.id),
+  const pending = expenses.filter(
+    (expense) => expenseState(expense.id, approvals) === 'pending',
   );
-  const monthRevenue = sumKes(
-    monthSales
-      .map((sale) => saleRevenueKes(sale))
-      .filter((value): value is number => value !== null),
-  );
-  const monthSpend = sumKes(monthExpenses.map((expense) => expense.amountKes));
-
-  const todaySales = monthSales.filter((sale) => sale.recordedAt.slice(0, 10) === today);
-  const todayRevenue = sumKes(
-    todaySales
-      .map((sale) => saleRevenueKes(sale))
-      .filter((value): value is number => value !== null),
-  );
-  const todaySpend = sumKes(
-    monthExpenses
-      .filter((expense) => expense.recordedAt.slice(0, 10) === today)
-      .map((expense) => expense.amountKes),
-  );
-
-  const pending = expenses.filter((expense) => expenseState(expense.id, approvals) === 'pending');
-  const unpriced = monthSales.filter((sale) => saleRevenueKes(sale) === null).length;
+  const unpriced = month.unpricedSales;
 
   async function decide(expense: Expense, decision: 'approved' | 'rejected') {
     setError(null);
@@ -129,10 +111,10 @@ export function FinancePage() {
           <div className="status-grid">
             <Money label="Today in" value={todayRevenue} />
             <Money label="Today out" value={todaySpend} />
-            <Money label="Today net" value={roundKes(todayRevenue - todaySpend)} strong />
+            <Money label="Today net" value={day.netKes} strong />
             <Money label="This month in" value={monthRevenue} />
             <Money label="This month out" value={monthSpend} />
-            <Money label="This month net" value={roundKes(monthRevenue - monthSpend)} strong />
+            <Money label="This month net" value={month.netKes} strong />
           </div>
           {loading && <p className="muted">Loading this phone’s records…</p>}
           {unpriced > 0 && (

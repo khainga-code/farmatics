@@ -98,9 +98,11 @@ try {
       );
       await tx.query(
         `insert into mortality_events
-           (id, farm_id, batch_id, count, cause, recorded_at, recorded_by)
-         values ($1, $2, $3, 4, 'Heat stress', now() - interval '12 days', $4)`,
-        [randomUUID(), farmId, batchId, ownerId],
+           (id, farm_id, batch_id, count, cause, cause_category, recorded_at, recorded_by)
+         values
+           ($1, $2, $3, 4, 'Heat stress', 'heat', now() - interval '12 days', $4),
+           ($5, $2, $3, 3, 'Gumboro suspected', 'disease', now() - interval '3 days', $4)`,
+        [randomUUID(), farmId, batchId, ownerId, randomUUID()],
       );
       await tx.query(
         `insert into vaccination_events

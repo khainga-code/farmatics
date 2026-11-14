@@ -75,6 +75,13 @@ export interface SyncClient {
    * of them queue or none do.
    */
   saveRecords(records: NewRecord[]): Promise<string[]>;
+  /**
+   * Drops the phone's copy of the farm and the pull cursor so the next pull
+   * rebuilds it - used when a user's permissions change and whole tables may
+   * appear or disappear. The outbox is deliberately untouched: queued work is
+   * pushed before a reset and must never be lost by one.
+   */
+  resetRecords(): Promise<void>;
   pendingCount(): Promise<number>;
   attention(): Promise<SyncRejection[]>;
   getCursor(): Promise<string>;
@@ -171,6 +178,14 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 
     notify();
     return keys;
+  }
+
+  async function resetRecords(): Promise<void> {
+    await db.transaction('rw', db.records, db.meta, async () => {
+      await db.records.clear();
+      await db.meta.delete('cursor');
+    });
+    notify();
   }
 
   async function saveRecord(
@@ -385,6 +400,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
   return {
     saveRecord,
     saveRecords,
+    resetRecords,
     pendingCount,
     attention,
     getCursor: readCursor,

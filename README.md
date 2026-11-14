@@ -7,11 +7,14 @@ they reconnect.
 ## Status
 
 **Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
-built. Phase 4 salesperson allocation built.** Accounts, roles, devices, the
+built. Phase 4 salesperson allocation built. Phase 5 health and phone-level
+privacy built.** Accounts, roles, devices, the
 sync engine and offline PIN unlock work end to end. Poultry batches, mortality,
 transfers, sales, vaccinations and the feed store now sit on that foundation,
-with a cash book for sales revenue, expenses and approvals, and allocations
-that keep a salesperson selling only from the birds the farm gave them.
+with a cash book for sales revenue, expenses and approvals, allocations
+that keep a salesperson selling only from the birds the farm gave them, and a
+health screen that turns the flock's records into losses, survival and
+vaccination cover.
 
 | Area | State |
 | --- | --- |
@@ -28,6 +31,8 @@ that keep a salesperson selling only from the birds the farm gave them.
 | Feed store in kilograms | Working, tested |
 | Cash book: priced sales, expenses, approvals | Working, tested |
 | Salesperson allocation and returns | Working, tested; birds and feed kg |
+| Health monitoring, mortality causes and vaccination compliance | Working, tested in shared |
+| Cash book hidden from phones without finance permission | Working, API tests written |
 
 ## Offline behaviour
 
@@ -84,6 +89,32 @@ the allocate form needs is one earlier visit to cache the team list; a
 salesperson needs no network at all to sell.
 
 The full rule set is in [`docs/PHASE-4.md`](./docs/PHASE-4.md).
+
+## Health monitoring
+
+The Health screen reads the events already on the phone and shows, per active
+batch, how many birds were lost, how many in the first week and in the last
+seven days, the mortality and survival rates, whether each vaccination was on
+time or late, and what is killing birds by category. A batch is flagged when
+first-week losses reach 2% or cumulative losses reach 5% of the birds that
+arrived.
+
+Deaths can be tagged as disease, heat, cold, predator, injury, culling or
+unknown. Older deaths with no category are shown as uncategorised, never
+guessed.
+
+## Who sees what
+
+The pull only carries the tables a member may read. Expenses and their
+approvals are not sent to a phone without `view_finance` or `record_expense`,
+so the cash book does not sit on a stock keeper's device at all. When a
+person's rights change, the phone pushes any queued work, rebuilds its local
+copy and pulls again.
+
+Sales are still pulled by everyone because bird counts drive every batch
+balance; the sale price travels with them.
+
+The full rule set is in [`docs/PHASE-5.md`](./docs/PHASE-5.md).
 
 ## Requirements
 
@@ -155,6 +186,7 @@ docs/
   PHASE-2.md        Poultry and feed: rules, entities, screens, rejections
   PHASE-3.md        Finance: cash book, approvals, batch margin
   PHASE-4.md        Salesperson allocation: birds, feed, sales, returns
+  PHASE-5.md        Health monitoring and phone-level privacy
 ```
 
 ## Configuration

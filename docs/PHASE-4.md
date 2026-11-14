@@ -100,9 +100,10 @@ mismatched batch, and feed issued with the birds.
 
 ## Still open
 
-- Goat and cattle management, the standalone vaccination and mortality
-  monitoring module, and reports remain unbuilt.
-- A salesperson's sales are still pulled to their phone with the rest of the
-  farm's changes; per-role pull filtering is not built.
+- Goat and cattle management and reports remain unbuilt. The standalone health
+  module (vaccination compliance and mortality monitoring) is built in
+  Phase 5.
+- Sale prices still travel with every pull because bird counts drive balances;
+  only the expense tables are filtered by permission (Phase 5).
 - Commission, salesperson targets, credit sales and receivables are out of
   scope.

@@ -12,6 +12,7 @@ import { Badge, Button } from './ui.js';
 const NAV = [
   { to: '/', label: 'Home', end: true },
   { to: '/poultry', label: 'Poultry', end: false },
+  { to: '/health', label: 'Health', end: false },
   { to: '/store', label: 'Feed store', end: false },
   { to: '/sales', label: 'Sales', end: false },
   { to: '/finance', label: 'Finance', end: false },
@@ -54,6 +55,9 @@ export function AppLayout({
     };
   }, [user, online]);
 
+  const canSeeHealth =
+    permissions.includes('record_mortality') || permissions.includes('view_reports');
+
   const canSeeStore =
     permissions.includes('manage_setup') ||
     permissions.includes('receive_stock') ||
@@ -88,6 +92,7 @@ export function AppLayout({
 
       <nav className="nav" aria-label="Modules">
         {NAV.filter((item) => {
+          if (item.to === '/health') return canSeeHealth;
           if (item.to === '/store') return canSeeStore;
           if (item.to === '/sales') return canSeeSales;
           if (item.to === '/finance') return canSeeFinance;
