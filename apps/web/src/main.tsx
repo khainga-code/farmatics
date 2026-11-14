@@ -22,7 +22,7 @@ createRoot(container).render(
 // and a stale shell cache there is confusing rather than useful.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => {
+    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {
       // Offline support is an enhancement; never block the app on it.
     });
   });

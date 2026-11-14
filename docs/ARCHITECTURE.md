@@ -117,6 +117,10 @@ batch that points at it even when both were created offline minutes apart.
   is the smallest that still survives a slow mobile network.
 - Lockout is five attempts. The owner waits fifteen minutes; staff stay locked
   until the owner unlocks them, which the dashboard supports.
+- Sign-in endpoints carry two limits: requests per IP, and attempts per phone or
+  username. The second is what stops a distributed guess, since a new address
+  does not buy a new account budget. A successful sign-in clears the account
+  window. `apps/api/src/auth/throttle.ts` holds the sliding window.
 - Every sign-in, account change and approval appends to `audit_log`.
 
 The JWT claim shape is deliberate: it is what the offline session bundle
@@ -142,9 +146,12 @@ Two rules matter for correctness:
 - Work never waits for the network. The lock screen unlocks with the local
   verifier, and the outbox drains whenever the API is reachable.
 
-The app shell is cached by a small service worker (`apps/web/public/sw.js`).
-Navigation is network-first with a cached fallback; API responses are never
-cached. In development the proxy is disabled if you need to simulate an
+The app shell is cached by a service worker generated at build time by
+`apps/web/tools/sw.ts`. Its cache name embeds a revision derived from the
+hashed bundle filenames and the built `index.html`, so every deploy installs a
+new worker that precaches its own assets; activation deletes the previous
+cache. Navigation is network-first with a cached fallback; API responses are
+never cached. In development the proxy is disabled if you need to simulate an
 offline phone, because the browser itself cannot drop the connection.
 
 ## Local database
@@ -164,12 +171,14 @@ Neon or any Postgres. Nothing above the driver layer changes.
 | Shared rules | `packages/shared/test` | Phone normalisation, permission resolution, wire schemas, batch day math, sale gate, vaccination schedule, balances, money rounding, approval state, mortality windows and vaccination compliance |
 | Database | `packages/db/test` | RLS across tenants, change sequence ordering, finance constraints, sale price checks, SQL splitting |
 | Offline engine | `packages/sync/test` | Atomic save, outbox ordering, push and pull, retry, permission-change reset, lock and unlock |
-| API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts, pull access by permission |
+| API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts, pull access by permission, per-account sign-in limits |
 | Poultry and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate, vaccinations, transfers, stock in kg, tenant boundaries |
 | Finance | `apps/api/test/finance.test.ts` | Expense permissions, one decision per expense, priced and unpriced sales, tenant boundaries |
 | Allocation | `apps/api/test/allocations.test.ts` | Own-allocation sales, walk-in sales, over-allocation, returns, feed issued with the birds, cross-farm ids |
 | Pull access | `apps/api/test/pull-access.test.ts` | Which roles receive expenses, approvals and sale prices |
+| Throttle | `apps/api/test/throttle.test.ts` | Sliding window, no extension on rejection, reset, per-key independence |
 | Two phones | `apps/api/test/two-phone.test.ts` | Both phones offline, both write, both reconnect |
+| Web | `apps/web/test` | Money selectors and the service-worker build revision |
 
 API tests drive the real Fastify app against an in-memory Postgres, so routes,
 validation, hashing and SQL all execute. Only the SMS sender is stubbed.
@@ -195,8 +204,7 @@ These are known and intentional for now:
 - The thirty-second refresh grace window accepts a rotated token briefly. It is
   a deliberate trade against lost responses, not an oversight.
 - `pnpm start` runs the API through `tsx` rather than a compiled bundle.
-- Rate limiting is per IP. Per-account throttling is a Phase 6 item.
+- The per-account throttle is in process memory. A deployment with more than
+  one API instance needs a shared store behind the same interface.
 - The SMS sender for Africa's Talking is written but untested until an account
   is provisioned.
-- The app-shell service worker is hand-written and has no build-time revision
-  manifest yet; a cache-busting strategy is a Phase 6 item.

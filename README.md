@@ -8,13 +8,14 @@ they reconnect.
 
 **Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
 built. Phase 4 salesperson allocation built. Phase 5 health and phone-level
-privacy built.** Accounts, roles, devices, the
+privacy built. Phase 6 hardening built.** Accounts, roles, devices, the
 sync engine and offline PIN unlock work end to end. Poultry batches, mortality,
 transfers, sales, vaccinations and the feed store now sit on that foundation,
 with a cash book for sales revenue, expenses and approvals, allocations
-that keep a salesperson selling only from the birds the farm gave them, and a
+that keep a salesperson selling only from the birds the farm gave them, a
 health screen that turns the flock's records into losses, survival and
-vaccination cover.
+vaccination cover, and sign-in limits that follow the account rather than the
+network it is tried from.
 
 | Area | State |
 | --- | --- |
@@ -25,7 +26,7 @@ vaccination cover.
 | Change sequence for sync cursors | Working, tested |
 | Sync engine (outbox push, pull by cursor) | Working, tested on two phones |
 | Offline PIN unlock and offline day limit | Working |
-| Installable PWA with app-shell cache | Working |
+| Installable PWA with a revisioned app-shell cache | Working |
 | Poultry batches, mortality, transfers, sales | Working, tested |
 | Vaccination schedule and reminders | Working |
 | Feed store in kilograms | Working, tested |
@@ -33,6 +34,7 @@ vaccination cover.
 | Salesperson allocation and returns | Working, tested; birds and feed kg |
 | Health monitoring, mortality causes and vaccination compliance | Working, tested in shared |
 | Cash book hidden from phones without finance permission | Working, API tests written |
+| Per-account limits on register, verify and sign-in | Working, tested |
 
 ## Offline behaviour
 
@@ -187,6 +189,7 @@ docs/
   PHASE-3.md        Finance: cash book, approvals, batch margin
   PHASE-4.md        Salesperson allocation: birds, feed, sales, returns
   PHASE-5.md        Health monitoring and phone-level privacy
+  PHASE-6.md        Hardening: per-account limits and a revisioned shell
 ```
 
 ## Configuration

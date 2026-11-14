@@ -6,5 +6,5 @@
     "types": ["vite/client"],
     "allowImportingTsExtensions": false
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tools/**/*.ts", "vite.config.ts"]
 }

@@ -25,8 +25,8 @@ export const notFound = (message = 'Not found.') => new AppError(404, 'not_found
 
 export const conflict = (code: string, message: string) => new AppError(409, code, message);
 
-export const tooManyRequests = (code: string, message: string) =>
-  new AppError(429, code, message);
+export const tooManyRequests = (code: string, message: string, details?: unknown) =>
+  new AppError(429, code, message, details);
 
 export const locked = (message: string) => new AppError(423, 'account_locked', message);
 

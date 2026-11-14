@@ -458,3 +458,73 @@ describe('audit trail', () => {
     expect(actions).toContain('account.created');
   });
 });
+
+describe('per-account throttling', () => {
+  let throttled: FastifyInstance;
+
+  beforeAll(async () => {
+    // A second app over the same database with the limits switched on. The
+    // rest of this file runs with them off so repeated attempts can be tested
+    // without waiting for a window.
+    throttled = await buildApp({
+      config: loadConfig({
+        rateLimitEnabled: true,
+        exposeOtpInResponse: true,
+        jwtSecret: 'test-secret-that-is-long-enough-for-hashing',
+        accessTokenTtlSeconds: 900,
+      }),
+      db: ctx,
+      logger: false,
+      sms,
+    });
+    await throttled.ready();
+  }, 30_000);
+
+  afterAll(async () => {
+    await throttled.close();
+  });
+
+  function registration(phone: string) {
+    return {
+      farmName: `Farm ${phone}`,
+      ownerName: 'Owner One',
+      phone,
+      password: 'correct horse battery',
+    };
+  }
+
+  it('stops one number after its attempts, even from new IPs', async () => {
+    const phone = nextPhone();
+
+    // The first attempt creates the pending farm; the next two are refused as
+    // already registered. All three count against the number.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await throttled.inject({
+        method: 'POST',
+        url: '/api/v1/auth/register',
+        payload: registration(phone),
+        remoteAddress: `10.10.0.${attempt + 1}`,
+      });
+      expect(response.statusCode).toBe(attempt === 0 ? 201 : 409);
+    }
+
+    const blocked = await throttled.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: registration(phone),
+      remoteAddress: '10.10.1.99',
+    });
+    expect(blocked.statusCode).toBe(429);
+    expect((blocked.json() as { error: { code: string } }).error.code).toBe('rate_limited');
+
+    // A different number from that same address has its own budget: the
+    // limit follows the account, not the caller's IP.
+    const other = await throttled.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: registration(nextPhone()),
+      remoteAddress: '10.10.1.99',
+    });
+    expect(other.statusCode).toBe(201);
+  });
+});

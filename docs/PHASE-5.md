@@ -100,6 +100,6 @@ sync, API and web tests one package at a time.
   unbuilt; this health module covers the broiler schedule.
 - Sale prices are visible to every role because bird counts are. A stricter
   split (price on a finance-only table) is not built.
-- Per-account throttling and service-worker cache busting remain Phase 6 items.
+- Per-account throttling and service-worker cache busting are built in Phase 6.
 - Commission, salesperson targets, credit sales and receivables are out of
   scope.

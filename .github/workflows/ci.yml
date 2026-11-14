@@ -55,3 +55,6 @@ jobs:
 
       - name: Production web build
         run: pnpm --filter @farmatics/web build
+
+      - name: Service worker was generated
+        run: test -f apps/web/dist/sw.js

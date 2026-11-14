@@ -9,24 +9,64 @@ import {
 } from '@farmatics/shared';
 import type { AppConfig } from '../config.js';
 import { parseBody } from '../validation.js';
+import { tooManyRequests } from '../errors.js';
 import { requireAuth, type Authenticate } from '../auth/guard.js';
 import type { AuthService, RequestMeta } from '../auth/service.js';
+import {
+  AUTH_THROTTLE_LIMITS,
+  createAccountThrottle,
+  type AccountThrottle,
+} from '../auth/throttle.js';
 
 function metaFrom(request: FastifyRequest): RequestMeta {
   return { ip: request.ip ?? null, userAgent: request.headers['user-agent'] ?? null };
 }
 
+function guard(limiter: AccountThrottle, key: string): void {
+  if (limiter.consume(key)) return;
+  const retryAfter = limiter.retryAfterSeconds(key);
+  const minutes = Math.max(1, Math.ceil(retryAfter / 60));
+  throw tooManyRequests(
+    'rate_limited',
+    `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    { retryAfter },
+  );
+}
+
+type ThrottleName = 'register' | 'verify' | 'login' | 'staffLogin';
+
 export function registerAuthRoutes(
   app: FastifyInstance,
   deps: { service: AuthService; config: AppConfig; authenticate: Authenticate },
 ): void {
-  const { service, authenticate } = deps;
+  const { service, config, authenticate } = deps;
+
+  // The per-IP limit on these routes is load-bearing but blind to the account
+  // being tried. These count attempts per phone or username, so a fresh IP is
+  // no help.
+  const throttles = config.rateLimitEnabled
+    ? {
+        register: createAccountThrottle(AUTH_THROTTLE_LIMITS.register),
+        verify: createAccountThrottle(AUTH_THROTTLE_LIMITS.verify),
+        login: createAccountThrottle(AUTH_THROTTLE_LIMITS.login),
+        staffLogin: createAccountThrottle(AUTH_THROTTLE_LIMITS.staffLogin),
+      }
+    : null;
+
+  function check(name: ThrottleName, key: string): void {
+    if (throttles) guard(throttles[name], key);
+  }
+
+  function clear(name: ThrottleName, key: string): void {
+    throttles?.[name].reset(key);
+  }
 
   app.post(
     '/auth/register',
     { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } },
     async (request, reply) => {
       const input = parseBody(registerFarmSchema, request.body);
+      check('register', input.phone);
       const result = await service.registerFarm(input, metaFrom(request));
       return reply.status(201).send(result);
     },
@@ -37,6 +77,7 @@ export function registerAuthRoutes(
     { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } },
     async (request, reply) => {
       const input = parseBody(verifyOtpSchema, request.body);
+      check('verify', input.phone);
       const bundle = await service.verifyRegistration(
         input.phone,
         input.code,
@@ -55,7 +96,15 @@ export function registerAuthRoutes(
     { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } },
     async (request) => {
       const input = parseBody(loginSchema, request.body);
-      return service.loginWithPassword(input.phone, input.password, input, metaFrom(request));
+      check('login', input.phone);
+      const bundle = await service.loginWithPassword(
+        input.phone,
+        input.password,
+        input,
+        metaFrom(request),
+      );
+      clear('login', input.phone);
+      return bundle;
     },
   );
 
@@ -64,7 +113,15 @@ export function registerAuthRoutes(
     { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } },
     async (request) => {
       const input = parseBody(staffLoginSchema, request.body);
-      return service.loginWithPin(input.username, input.pin, input, metaFrom(request));
+      check('staffLogin', input.username);
+      const bundle = await service.loginWithPin(
+        input.username,
+        input.pin,
+        input,
+        metaFrom(request),
+      );
+      clear('staffLogin', input.username);
+      return bundle;
     },
   );
 
