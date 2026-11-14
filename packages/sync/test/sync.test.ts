@@ -103,6 +103,75 @@ describe('local writes and push', () => {
     expect(synced?.changeSeq).toBe('41');
   });
 
+  it('queues related records in one write and pushes them in order', async () => {
+    const db = newDb();
+    const allocationId = randomUUID();
+    const feedId = randomUUID();
+    const sent: Array<{ table: string; id: string }> = [];
+    const client = createSyncClient({
+      db,
+      transport: transport({
+        push: async (records) => {
+          sent.push(...records.map((record) => ({ table: record.table, id: record.id })));
+          return {
+            results: records.map((record) => ({
+              table: record.table,
+              id: record.id,
+              status: 'accepted' as const,
+              changeSeq: '42',
+            })),
+            serverTime: new Date().toISOString(),
+          };
+        },
+      }),
+    });
+
+    const keys = await client.saveRecords([
+      {
+        table: 'sales_allocations',
+        id: allocationId,
+        data: { count: 40 },
+      },
+      {
+        table: 'stock_movements',
+        id: feedId,
+        data: { allocationId, quantityKg: 25 },
+      },
+    ]);
+
+    expect(keys).toHaveLength(2);
+    expect(await client.pendingCount()).toBe(2);
+
+    await client.push();
+    // The allocation must reach the server before the feed issue that names it.
+    expect(sent).toEqual([
+      { table: 'sales_allocations', id: allocationId },
+      { table: 'stock_movements', id: feedId },
+    ]);
+    expect(await client.pendingCount()).toBe(0);
+  });
+
+  it('writes nothing when a related save fails', async () => {
+    const db = newDb();
+    const client = createSyncClient({ db, transport: transport({}) });
+
+    await expect(
+      client.saveRecords([
+        { table: 'sales_allocations', id: randomUUID(), data: { count: 40 } },
+        // A function cannot be stored in IndexedDB, so the second write fails
+        // and the whole transaction - the allocation included - rolls back.
+        {
+          table: 'stock_movements',
+          id: randomUUID(),
+          data: { unusable: () => 25 },
+        },
+      ]),
+    ).rejects.toThrow();
+
+    expect(await client.pendingCount()).toBe(0);
+    expect(await db.records.count()).toBe(0);
+  });
+
   it('treats a duplicate as success, not as work still waiting', async () => {
     const db = newDb();
     const id = randomUUID();

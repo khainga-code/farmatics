@@ -156,6 +156,7 @@ export function createSyncService(deps: { db: DatabaseContext }): SyncService {
               {
                 farmId: claims.farm,
                 userId: claims.sub,
+                role: claims.role,
                 deviceId: claims.dev,
                 now: new Date(),
               },

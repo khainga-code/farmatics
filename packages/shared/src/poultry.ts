@@ -202,6 +202,8 @@ export const saleInputSchema = z.object({
   note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
   /** Price per bird in KES. Older queued sales may omit it. */
   unitPriceKes: z.number().min(0).max(1_000_000).optional(),
+  /** Required when a salesperson sells from their own allocation. */
+  allocationId: uuid.optional(),
   recordedAt: isoTimestampSchema,
   clientTime: isoTimestampSchema.optional(),
 });
@@ -232,6 +234,8 @@ export const stockMovementInputSchema = z
       .refine((value) => value !== 0, 'Enter a weight.')
       .refine((value) => Math.abs(value) <= 1_000_000, 'That weight is too large.'),
     batchId: uuid.optional(),
+    /** Set when the feed was handed to a salesperson with their birds. */
+    allocationId: uuid.optional(),
     note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
     recordedAt: isoTimestampSchema,
     clientTime: isoTimestampSchema.optional(),
@@ -243,6 +247,10 @@ export const stockMovementInputSchema = z
   .refine((value) => value.kind !== 'issue' || value.batchId !== undefined, {
     message: 'Choose the batch the feed was used for.',
     path: ['batchId'],
+  })
+  .refine((value) => value.allocationId === undefined || value.kind === 'issue', {
+    message: 'Only feed issued from the store can name an allocation.',
+    path: ['allocationId'],
   });
 
 export type HouseInput = z.infer<typeof houseInputSchema>;

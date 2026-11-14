@@ -18,12 +18,16 @@ import { AppLayout } from '../components/AppLayout.js';
 import { Alert, Badge, Button, Field } from '../components/ui.js';
 import { SyncCard } from '../components/SyncCard.js';
 import {
+  allocationBalanceFor,
   balanceFor,
+  feedAllocatedFor,
   onHandFor,
+  toAllocations,
   toBatches,
   toExpenseApprovals,
   toExpenses,
   toMortality,
+  toReturns,
   toSales,
   toStockItems,
   toStockMovements,
@@ -57,6 +61,20 @@ export function DashboardPage() {
   const vaccinations = toVaccinations(data.vaccination_events);
   const stockItems = toStockItems(data.stock_items);
   const movements = toStockMovements(data.stock_movements);
+  const returns = toReturns(data.bird_returns);
+
+  const myAllocations = toAllocations(data.sales_allocations).filter(
+    (allocation) => allocation.salespersonId === user?.id,
+  );
+  const allocationRemaining = myAllocations.reduce(
+    (total, allocation) =>
+      total + allocationBalanceFor(allocation, sales, returns).remaining,
+    0,
+  );
+  const allocationFeedKg = myAllocations.reduce(
+    (total, allocation) => total + feedAllocatedFor(allocation.id, movements),
+    0,
+  );
 
   const today = toDateOnly(new Date());
   const liveBirds = batches.reduce(
@@ -227,6 +245,36 @@ export function DashboardPage() {
             </div>
           </div>
         </section>
+
+        {user.role === 'salesperson' && myAllocations.length > 0 && (
+          <section className="card">
+            <div className="card-head">
+              <h2 className="card-title">Your allocation</h2>
+              <Link to="/sales">Open sales</Link>
+            </div>
+            <div className="card-body">
+              <div className="status-grid">
+                <div>
+                  <div className="status-label">Birds left to sell</div>
+                  <div className="status-value">{allocationRemaining}</div>
+                </div>
+                <div>
+                  <div className="status-label">Allocations</div>
+                  <div className="status-value">{myAllocations.length}</div>
+                </div>
+                {allocationFeedKg > 0 && (
+                  <div>
+                    <div className="status-label">Feed with you</div>
+                    <div className="status-value">{allocationFeedKg} kg</div>
+                  </div>
+                )}
+              </div>
+              <p className="muted">
+                Sales are recorded against these birds. Unsold birds can be returned to the farm.
+              </p>
+            </div>
+          </section>
+        )}
 
         {canSeeFinance && (
           <section className="card">

@@ -151,6 +151,13 @@ a:hover {
   gap: 6px;
 }
 
+/* Two inputs that belong together, such as feed item and weight. */
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
 .field-label {
   font-size: 13px;
   font-weight: 600;

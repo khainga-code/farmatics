@@ -9,6 +9,7 @@ loadEnv();
 const OWNER_PHONE = '+254700000001';
 const OWNER_PASSWORD = 'farmatics2026';
 const EMPLOYEE_USERNAME = 'joseph';
+const SALESPERSON_USERNAME = 'mercy';
 
 const db = openDatabase();
 
@@ -26,7 +27,9 @@ try {
     const farmId = randomUUID();
     const ownerId = randomUUID();
     const employeeId = randomUUID();
+    const salespersonId = randomUUID();
     const tempPin = generateTempPin();
+    const salesPin = generateTempPin();
 
     await db.admin.transaction(async (tx) => {
       await tx.query('select set_config($1, $2, true)', ['app.farm_id', farmId]);
@@ -46,6 +49,18 @@ try {
           '+254700000002',
           EMPLOYEE_USERNAME,
           await hashSecret(tempPin),
+        ],
+      );
+      await tx.query(
+        `insert into users (id, farm_id, name, phone, username, role, pin_hash, must_change_pin)
+         values ($1, $2, $3, $4, $5, 'salesperson', $6, true)`,
+        [
+          salespersonId,
+          farmId,
+          'Mercy Wanjiku',
+          '+254700000003',
+          SALESPERSON_USERNAME,
+          await hashSecret(salesPin),
         ],
       );
 
@@ -94,6 +109,22 @@ try {
         [randomUUID(), farmId, batchId, ownerId],
       );
 
+      // Birds handed to the demo salesperson, so the Sales screen has data.
+      const allocationId = randomUUID();
+      await tx.query(
+        `insert into sales_allocations
+           (id, farm_id, batch_id, salesperson_id, count, note, recorded_at, recorded_by)
+         values ($1, $2, $3, $4, 80, 'Demo allocation', now() - interval '2 days', $5)`,
+        [allocationId, farmId, batchId, salespersonId, ownerId],
+      );
+      // Feed that went out with those birds, so the hand-over shows in kg too.
+      await tx.query(
+        `insert into stock_movements
+           (id, farm_id, stock_item_id, kind, quantity_kg, batch_id, allocation_id, note, recorded_at, recorded_by)
+         values ($1, $2, $3, 'issue', 60, $4, $5, 'Sent with the birds', now() - interval '2 days', $6)`,
+        [randomUUID(), farmId, feedId, batchId, allocationId, ownerId],
+      );
+
       // Money: one approved cost and one still waiting, so the finance screen
       // shows both states on first sign-in.
       const chickExpenseId = randomUUID();
@@ -121,6 +152,9 @@ try {
     console.log('Demo farm created:');
     console.log(`  owner   ${OWNER_PHONE} / ${OWNER_PASSWORD}`);
     console.log(`  staff   ${EMPLOYEE_USERNAME} / ${tempPin} (must be changed at first sign-in)`);
+    console.log(
+      `  sales   ${SALESPERSON_USERNAME} / ${salesPin} (must be changed at first sign-in)`,
+    );
   }
 } finally {
   await db.close();

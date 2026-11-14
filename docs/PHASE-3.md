@@ -96,7 +96,7 @@ the cash book. The server checks the permission again on every push.
 
 ```
 packages/shared  39 tests   includes 9 money, approval and batch-margin tests
-apps/api          9 finance tests written over the real sync endpoints
+apps/api          9 finance tests, passing over the real sync endpoints
 ```
 
 The finance API tests cover an owner and manager recording expenses, a stock
@@ -104,11 +104,10 @@ keeper being refused, a zero amount, a single decision per expense, cross-farm
 approval and cross-farm batch tagging, and the priced / unpriced sale wire
 shape.
 
-> **Host note.** This machine could not run the embedded Postgres during Phase 3:
-> commit charge was already at roughly 17.5 GB of an 18.4 GB limit, and PGlite
-> workers exited with `Fatal process out of memory: Zone` (exit code
-> `2147483651`). Shared tests and typechecks pass; the API finance file must be
-> run on a machine with more headroom before it is trusted.
+> **Verification note.** The finance suite and the migration chain were first
+> written while this machine was out of memory. They have since been run here:
+> migrations `0001` to `0006` apply cleanly and all nine finance tests pass. CI
+> is still to be added.
 
 ## Still open
 

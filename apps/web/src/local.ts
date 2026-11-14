@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LocalRecord } from '@farmatics/sync';
 import {
+  allocationBalance,
   batchCounts,
   stockOnHand,
+  type AllocationBalance,
   type ExpenseCategory,
   type ExpenseMethod,
   type StockMovementKind,
@@ -24,6 +26,8 @@ const TABLES = [
   'mortality_events',
   'bird_transfers',
   'bird_sales',
+  'sales_allocations',
+  'bird_returns',
   'vaccination_events',
   'stock_items',
   'stock_movements',
@@ -42,6 +46,8 @@ function emptyFarmData(): FarmData {
     mortality_events: [],
     bird_transfers: [],
     bird_sales: [],
+    sales_allocations: [],
+    bird_returns: [],
     vaccination_events: [],
     stock_items: [],
     stock_movements: [],
@@ -128,10 +134,24 @@ export interface BirdTransfer extends EventBase {
 
 export interface BirdSale extends EventBase {
   batchId: string;
+  allocationId: string | null;
   count: number;
   buyer: string | null;
   note: string | null;
   unitPriceKes: number | null;
+}
+
+export interface SalesAllocation extends EventBase {
+  batchId: string;
+  salespersonId: string;
+  count: number;
+  note: string | null;
+}
+
+export interface BirdReturn extends EventBase {
+  allocationId: string;
+  count: number;
+  reason: string | null;
 }
 
 export interface VaccinationEvent extends EventBase {
@@ -154,6 +174,8 @@ export interface StockMovement extends EventBase {
   kind: StockMovementKind;
   quantityKg: number;
   batchId: string | null;
+  /** Set when the feed went out with a salesperson's allocation. */
+  allocationId: string | null;
   note: string | null;
 }
 
@@ -207,6 +229,7 @@ export function toSales(records: LocalRecord[]): BirdSale[] {
   return records.map((record) => ({
     id: record.id,
     batchId: text(record.data['batchId']),
+    allocationId: maybeText(record.data['allocationId']),
     count: count(record.data['count']),
     buyer: maybeText(record.data['buyer']),
     note: maybeText(record.data['note']),
@@ -214,6 +237,29 @@ export function toSales(records: LocalRecord[]): BirdSale[] {
       record.data['unitPriceKes'] === null || record.data['unitPriceKes'] === undefined
         ? null
         : count(record.data['unitPriceKes']),
+    recordedAt: text(record.data['recordedAt']),
+    dirty: record.dirty,
+  }));
+}
+
+export function toAllocations(records: LocalRecord[]): SalesAllocation[] {
+  return records.map((record) => ({
+    id: record.id,
+    batchId: text(record.data['batchId']),
+    salespersonId: text(record.data['salespersonId']),
+    count: count(record.data['count']),
+    note: maybeText(record.data['note']),
+    recordedAt: text(record.data['recordedAt']),
+    dirty: record.dirty,
+  }));
+}
+
+export function toReturns(records: LocalRecord[]): BirdReturn[] {
+  return records.map((record) => ({
+    id: record.id,
+    allocationId: text(record.data['allocationId']),
+    count: count(record.data['count']),
+    reason: maybeText(record.data['reason']),
     recordedAt: text(record.data['recordedAt']),
     dirty: record.dirty,
   }));
@@ -251,6 +297,7 @@ export function toStockMovements(records: LocalRecord[]): StockMovement[] {
     kind: text(record.data['kind']) as StockMovementKind,
     quantityKg: count(record.data['quantityKg']),
     batchId: maybeText(record.data['batchId']),
+    allocationId: maybeText(record.data['allocationId']),
     note: maybeText(record.data['note']),
     recordedAt: text(record.data['recordedAt']),
     dirty: record.dirty,
@@ -326,6 +373,33 @@ export function balanceFor(
       .filter((event) => event.toBatchId === batch.id)
       .map((event) => event.count),
   });
+}
+
+/** Remaining birds on one allocation, derived from the phone's own events. */
+export function allocationBalanceFor(
+  allocation: SalesAllocation,
+  sales: BirdSale[],
+  returns: BirdReturn[],
+): AllocationBalance {
+  return allocationBalance({
+    allocated: allocation.count,
+    sold: sales
+      .filter((sale) => sale.allocationId === allocation.id)
+      .map((sale) => sale.count),
+    returned: returns
+      .filter((event) => event.allocationId === allocation.id)
+      .map((event) => event.count),
+  });
+}
+
+/** Feed issued with one allocation, in kilograms. Derived from the store. */
+export function feedAllocatedFor(allocationId: string, movements: StockMovement[]): number {
+  const issued = movements
+    .filter(
+      (movement) => movement.kind === 'issue' && movement.allocationId === allocationId,
+    )
+    .reduce((total, movement) => total + movement.quantityKg, 0);
+  return Math.round(issued * 100) / 100;
 }
 
 export function feedUsedBy(batchId: string, movements: StockMovement[]): number {

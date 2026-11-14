@@ -1,6 +1,8 @@
 import type { Db } from '@farmatics/db';
 import {
+  allocationInputSchema,
   batchInputSchema,
+  birdReturnInputSchema,
   expenseApprovalInputSchema,
   expenseInputSchema,
   houseInputSchema,
@@ -12,12 +14,15 @@ import {
   toDateOnly,
   transferInputSchema,
   vaccinationInputSchema,
+  type AllocationInput,
   type BatchInput,
+  type BirdReturnInput,
   type ExpenseApprovalInput,
   type ExpenseInput,
   type HouseInput,
   type MortalityInput,
   type Permission,
+  type Role,
   type SaleInput,
   type StockItemInput,
   type StockMovementInput,
@@ -53,6 +58,7 @@ export class SyncValidationError extends Error {
 export interface SyncEntityContext {
   farmId: string;
   userId: string;
+  role: Role;
   deviceId: string | null;
   /** Server clock at the moment the push arrived. */
   now: Date;
@@ -226,6 +232,65 @@ async function assertNotNegative(tx: Db, farmId: string, batchId: string): Promi
       'That would take the batch below zero birds. Check the count and try again.',
     );
   }
+}
+
+async function requireAllocation(
+  tx: Db,
+  farmId: string,
+  allocationId: unknown,
+): Promise<{ id: string; batch_id: string; salesperson_id: string; count: number }> {
+  const row = await tx.one<{
+    id: string;
+    batch_id: string;
+    salesperson_id: string;
+    count: number;
+  }>(
+    `select id, batch_id, salesperson_id, count
+       from sales_allocations
+      where id = $1 and farm_id = $2 and deleted_at is null`,
+    [allocationId, farmId],
+  );
+  if (!row) {
+    throw new SyncValidationError(
+      'unknown_allocation',
+      'That allocation is not on this farm. Refresh and choose it again.',
+    );
+  }
+  return row;
+}
+
+async function allocationUsed(
+  tx: Db,
+  allocationId: string,
+): Promise<{ sold: number; returned: number }> {
+  const row = await tx.one<{ sold: string; returned: string }>(
+    `select
+       coalesce((select sum(count) from bird_sales
+                  where allocation_id = $1 and deleted_at is null), 0) as sold,
+       coalesce((select sum(count) from bird_returns
+                  where allocation_id = $1 and deleted_at is null), 0) as returned`,
+    [allocationId],
+  );
+  return { sold: Number(row?.sold ?? 0), returned: Number(row?.returned ?? 0) };
+}
+
+/**
+ * Birds already promised to salespeople but not yet sold or returned. A new
+ * allocation may not push this past the birds currently alive.
+ */
+async function batchOutstanding(tx: Db, batchId: string): Promise<number> {
+  const row = await tx.one<{ outstanding: string }>(
+    `select
+       coalesce((select sum(count) from sales_allocations
+                  where batch_id = $1 and deleted_at is null), 0)
+       - coalesce((select sum(count) from bird_sales
+                    where batch_id = $1 and allocation_id is not null and deleted_at is null), 0)
+       - coalesce((select sum(r.count) from bird_returns r
+                     join sales_allocations a on a.id = r.allocation_id
+                    where a.batch_id = $1 and r.deleted_at is null), 0) as outstanding`,
+    [batchId],
+  );
+  return Number(row?.outstanding ?? 0);
 }
 
 function eventColumns(
@@ -434,10 +499,41 @@ const saleEntity: SyncEntity = {
       );
     }
 
+    // A salesperson sells only from their own allocation. The owner and the
+    // farm manager may still record a walk-in sale with no allocation.
+    if (input.allocationId) {
+      const allocation = await requireAllocation(tx, ctx.farmId, input.allocationId);
+      if (allocation.batch_id !== input.batchId) {
+        throw new SyncValidationError(
+          'allocation_mismatch',
+          'That allocation belongs to a different batch.',
+        );
+      }
+      if (ctx.role === 'salesperson' && allocation.salesperson_id !== ctx.userId) {
+        throw new SyncValidationError(
+          'not_your_allocation',
+          'Those birds were allocated to another salesperson.',
+        );
+      }
+      const used = await allocationUsed(tx, allocation.id);
+      if (used.sold + used.returned + input.count > allocation.count) {
+        throw new SyncValidationError(
+          'not_enough_allocated',
+          `Only ${allocation.count - used.sold - used.returned} birds are left on that allocation.`,
+        );
+      }
+    } else if (ctx.role === 'salesperson') {
+      throw new SyncValidationError(
+        'allocation_required',
+        'Sell from your allocation so the farm can see which birds left with you.',
+      );
+    }
+
     const row = await insertOne(tx, 'bird_sales', {
       id,
       farm_id: ctx.farmId,
       batch_id: input.batchId,
+      allocation_id: input.allocationId ?? null,
       count: input.count,
       buyer: input.buyer ?? null,
       note: input.note ?? null,
@@ -458,6 +554,7 @@ const saleEntity: SyncEntity = {
       deletedAt: asIso(row['deleted_at']),
       data: {
         batchId: row['batch_id'],
+        allocationId: row['allocation_id'],
         count: num(row['count']),
         buyer: row['buyer'],
         note: row['note'],
@@ -568,6 +665,18 @@ const stockMovementEntity: SyncEntity = {
     }
     if (input.batchId) await requireBatch(tx, ctx.farmId, input.batchId);
 
+    // Feed handed to a salesperson must belong to the same batch as the
+    // allocation, or the two records would describe different birds.
+    if (input.allocationId) {
+      const allocation = await requireAllocation(tx, ctx.farmId, input.allocationId);
+      if (allocation.batch_id !== input.batchId) {
+        throw new SyncValidationError(
+          'allocation_mismatch',
+          'That allocation belongs to a different batch.',
+        );
+      }
+    }
+
     const row = await insertOne(tx, 'stock_movements', {
       id,
       farm_id: ctx.farmId,
@@ -575,6 +684,7 @@ const stockMovementEntity: SyncEntity = {
       kind: input.kind,
       quantity_kg: input.quantityKg,
       batch_id: input.batchId ?? null,
+      allocation_id: input.allocationId ?? null,
       note: input.note ?? null,
       ...eventColumns(ctx, input),
     });
@@ -592,6 +702,7 @@ const stockMovementEntity: SyncEntity = {
         kind: row['kind'],
         quantityKg: num(row['quantity_kg']),
         batchId: row['batch_id'],
+        allocationId: row['allocation_id'],
         note: row['note'],
         recordedAt: asIso(row['recorded_at']),
         recordedBy: row['recorded_by'],
@@ -705,6 +816,122 @@ const expenseApprovalEntity: SyncEntity = {
   },
 };
 
+const allocationEntity: SyncEntity = {
+  table: 'sales_allocations',
+  schema: allocationInputSchema,
+  permissionsFor: () => ['allocate_stock'],
+
+  async insert(tx, ctx, id, data) {
+    const input = data as AllocationInput;
+    const batch = await requireBatch(tx, ctx.farmId, input.batchId);
+
+    const person = await tx.one<{ id: string; role: string }>(
+      `select id, role from users
+        where id = $1 and farm_id = $2 and deleted_at is null and status = 'active'`,
+      [input.salespersonId, ctx.farmId],
+    );
+    if (!person || person.role !== 'salesperson') {
+      throw new SyncValidationError(
+        'unknown_salesperson',
+        'Choose an active salesperson on this farm.',
+      );
+    }
+
+    // Never promise more birds than the batch has alive. Allocating does not
+    // remove them from the flock; a sale does.
+    const live = await liveCount(tx, ctx.farmId, batch.id);
+    const outstanding = await batchOutstanding(tx, batch.id);
+    if (outstanding + input.count > live) {
+      throw new SyncValidationError(
+        'not_enough_birds',
+        `Only ${Math.max(live - outstanding, 0)} birds are free to allocate from this batch.`,
+      );
+    }
+
+    const row = await insertOne(tx, 'sales_allocations', {
+      id,
+      farm_id: ctx.farmId,
+      batch_id: input.batchId,
+      salesperson_id: input.salespersonId,
+      count: input.count,
+      note: input.note ?? null,
+      ...eventColumns(ctx, input),
+    });
+    return row ? { changeSeq: String(row.change_seq) } : null;
+  },
+
+  toChange(row) {
+    return {
+      table: 'sales_allocations',
+      id: String(row['id']),
+      changeSeq: String(row['change_seq']),
+      deletedAt: asIso(row['deleted_at']),
+      data: {
+        batchId: row['batch_id'],
+        salespersonId: row['salesperson_id'],
+        count: num(row['count']),
+        note: row['note'],
+        recordedAt: asIso(row['recorded_at']),
+        recordedBy: row['recorded_by'],
+        clientTime: asIso(row['client_time']),
+      },
+    };
+  },
+};
+
+const birdReturnEntity: SyncEntity = {
+  table: 'bird_returns',
+  schema: birdReturnInputSchema,
+  permissionsFor: () => ['record_return'],
+
+  async insert(tx, ctx, id, data) {
+    const input = data as BirdReturnInput;
+    const allocation = await requireAllocation(tx, ctx.farmId, input.allocationId);
+
+    if (ctx.role === 'salesperson' && allocation.salesperson_id !== ctx.userId) {
+      throw new SyncValidationError(
+        'not_your_allocation',
+        'Those birds were allocated to another salesperson.',
+      );
+    }
+
+    const used = await allocationUsed(tx, allocation.id);
+    if (used.sold + used.returned + input.count > allocation.count) {
+      throw new SyncValidationError(
+        'not_enough_allocated',
+        `Only ${allocation.count - used.sold - used.returned} birds are left on that allocation.`,
+      );
+    }
+
+    const row = await insertOne(tx, 'bird_returns', {
+      id,
+      farm_id: ctx.farmId,
+      allocation_id: input.allocationId,
+      count: input.count,
+      reason: input.reason ?? null,
+      ...eventColumns(ctx, input),
+    });
+    return row ? { changeSeq: String(row.change_seq) } : null;
+  },
+
+  toChange(row) {
+    return {
+      table: 'bird_returns',
+      id: String(row['id']),
+      changeSeq: String(row['change_seq']),
+      deletedAt: asIso(row['deleted_at']),
+      data: {
+        allocationId: row['allocation_id'],
+        count: num(row['count']),
+        reason: row['reason'],
+        recordedAt: asIso(row['recorded_at']),
+        recordedBy: row['recorded_by'],
+        clientTime: asIso(row['client_time']),
+      },
+    };
+  },
+};
+
 const ENTITIES: SyncEntity[] = [
   probeEntity,
   houseEntity,
@@ -712,6 +939,8 @@ const ENTITIES: SyncEntity[] = [
   mortalityEntity,
   transferEntity,
   saleEntity,
+  allocationEntity,
+  birdReturnEntity,
   vaccinationEntity,
   stockItemEntity,
   stockMovementEntity,
@@ -734,6 +963,8 @@ export const entitySchemas = {
   mortality_events: mortalityInputSchema,
   bird_transfers: transferInputSchema,
   bird_sales: saleInputSchema,
+  sales_allocations: allocationInputSchema,
+  bird_returns: birdReturnInputSchema,
   vaccination_events: vaccinationInputSchema,
   stock_items: stockItemInputSchema,
   stock_movements: stockMovementInputSchema,

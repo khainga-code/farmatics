@@ -13,6 +13,7 @@ const NAV = [
   { to: '/', label: 'Home', end: true },
   { to: '/poultry', label: 'Poultry', end: false },
   { to: '/store', label: 'Feed store', end: false },
+  { to: '/sales', label: 'Sales', end: false },
   { to: '/finance', label: 'Finance', end: false },
 ];
 
@@ -59,6 +60,11 @@ export function AppLayout({
     permissions.includes('reserve_feed') ||
     permissions.includes('record_feeding');
 
+  const canSeeSales =
+    permissions.includes('allocate_stock') ||
+    permissions.includes('record_sale') ||
+    permissions.includes('record_return');
+
   const canSeeFinance =
     permissions.includes('view_finance') || permissions.includes('record_expense');
 
@@ -83,6 +89,7 @@ export function AppLayout({
       <nav className="nav" aria-label="Modules">
         {NAV.filter((item) => {
           if (item.to === '/store') return canSeeStore;
+          if (item.to === '/sales') return canSeeSales;
           if (item.to === '/finance') return canSeeFinance;
           return true;
         }).map((item) => (

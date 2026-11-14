@@ -7,10 +7,11 @@ they reconnect.
 ## Status
 
 **Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
-built.** Accounts, roles, devices, the sync engine and offline PIN unlock work
-end to end. Poultry batches, mortality, transfers, sales, vaccinations and the
-feed store now sit on that foundation, with a cash book for sales revenue,
-expenses and approvals.
+built. Phase 4 salesperson allocation built.** Accounts, roles, devices, the
+sync engine and offline PIN unlock work end to end. Poultry batches, mortality,
+transfers, sales, vaccinations and the feed store now sit on that foundation,
+with a cash book for sales revenue, expenses and approvals, and allocations
+that keep a salesperson selling only from the birds the farm gave them.
 
 | Area | State |
 | --- | --- |
@@ -25,8 +26,8 @@ expenses and approvals.
 | Poultry batches, mortality, transfers, sales | Working, tested |
 | Vaccination schedule and reminders | Working |
 | Feed store in kilograms | Working, tested |
-| Cash book: priced sales, expenses, approvals | Working, tested in shared; API tests written |
-| Salesperson allocation | Not started |
+| Cash book: priced sales, expenses, approvals | Working, tested |
+| Salesperson allocation and returns | Working, tested; birds and feed kg |
 
 ## Offline behaviour
 
@@ -66,6 +67,24 @@ margin yet, because feed is recorded in kilograms rather than shillings.
 
 The full rule set is in [`docs/PHASE-3.md`](./docs/PHASE-3.md).
 
+## Sales allocation
+
+The owner or farm manager hands birds from a batch to a salesperson. She sells
+only from that allocation, and unsold birds can be returned. Allocating does
+not change the batch's live count: the birds stay in the flock until a sale
+records that they left. The balance is derived from the events
+(`allocated - sold - returned`), so two phones cannot disagree.
+
+Feed can go out with the birds. It is recorded as an ordinary store issue in
+kilograms, tagged with the allocation, so feed on hand is still derived from the
+store. The allocation and its feed are queued together in one write.
+
+Allocating, selling and returning are ordinary queued writes. The only network
+the allocate form needs is one earlier visit to cache the team list; a
+salesperson needs no network at all to sell.
+
+The full rule set is in [`docs/PHASE-4.md`](./docs/PHASE-4.md).
+
 ## Requirements
 
 - Node.js 22 or newer
@@ -91,12 +110,15 @@ Seeded accounts:
 | --- | --- | --- |
 | Owner | phone `0700 000 001` | `farmatics2026` |
 | Stock keeper | username `joseph` | temporary PIN printed by `pnpm seed` |
+| Salesperson | username `mercy` | temporary PIN printed by `pnpm seed` |
 
 The seed also creates a demo house, a batch that arrived twenty days ago, and
 750 kg of feed, so the poultry and store screens have real data on first
 sign-in. The second vaccination is due on that batch, and its reminder is open.
 Two demo expenses are created too: one approved for chicks and one transport
-cost still waiting for a decision.
+cost still waiting for a decision. The salesperson has an 80-bird allocation
+from the demo batch, with 60 kg of feed sent along, so the Sales screen has real
+data.
 
 In development the six-digit sign-up code is returned by the API and shown on
 the verify screen, so no SMS provider is needed.
@@ -132,6 +154,7 @@ docs/
   PHASE-1.md        Foundation: what is built, what is stubbed
   PHASE-2.md        Poultry and feed: rules, entities, screens, rejections
   PHASE-3.md        Finance: cash book, approvals, batch margin
+  PHASE-4.md        Salesperson allocation: birds, feed, sales, returns
 ```
 
 ## Configuration

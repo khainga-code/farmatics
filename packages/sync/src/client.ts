@@ -60,9 +60,21 @@ export interface SyncClientOptions {
   maxPullPages?: number;
 }
 
+export interface NewRecord {
+  table: string;
+  id: string;
+  data: Record<string, unknown>;
+}
+
 export interface SyncClient {
   /** Saves locally and queues for sync in one atomic write. */
   saveRecord(table: string, id: string, data: Record<string, unknown>): Promise<string>;
+  /**
+   * Saves several related records - an allocation and the feed issued with it,
+   * for example - in one transaction and one ordered outbox write. Either all
+   * of them queue or none do.
+   */
+  saveRecords(records: NewRecord[]): Promise<string[]>;
   pendingCount(): Promise<number>;
   attention(): Promise<SyncRejection[]>;
   getCursor(): Promise<string>;
@@ -119,41 +131,55 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
     return entry?.value ?? '0';
   }
 
+  async function saveRecords(records: NewRecord[]): Promise<string[]> {
+    if (records.length === 0) return [];
+
+    const timestamp = now().toISOString();
+    const keys: string[] = [];
+
+    await db.transaction('rw', db.records, db.outbox, db.meta, async () => {
+      let sequence = Number((await db.meta.get('outboxSeq'))?.value ?? '0');
+      for (const record of records) {
+        const key = recordKey(record.table, record.id);
+        keys.push(key);
+        sequence += 1;
+        await db.records.put({
+          key,
+          table: record.table,
+          id: record.id,
+          data: record.data,
+          changeSeq: null,
+          deletedAt: null,
+          dirty: true,
+          updatedAt: timestamp,
+        });
+        await db.outbox.put({
+          id: key,
+          table: record.table,
+          recordId: record.id,
+          data: record.data,
+          createdAt: timestamp,
+          // A batch of writes keeps its order: the allocation is pushed before
+          // the feed issue that points at it.
+          order: sequence,
+          attempts: 0,
+          status: 'pending',
+        });
+      }
+      await db.meta.put({ key: 'outboxSeq', value: String(sequence) });
+    });
+
+    notify();
+    return keys;
+  }
+
   async function saveRecord(
     table: string,
     id: string,
     data: Record<string, unknown>,
   ): Promise<string> {
-    const key = recordKey(table, id);
-    const timestamp = now().toISOString();
-
-    await db.transaction('rw', db.records, db.outbox, db.meta, async () => {
-      const sequence = Number((await db.meta.get('outboxSeq'))?.value ?? '0') + 1;
-      await db.meta.put({ key: 'outboxSeq', value: String(sequence) });
-      await db.records.put({
-        key,
-        table,
-        id,
-        data,
-        changeSeq: null,
-        deletedAt: null,
-        dirty: true,
-        updatedAt: timestamp,
-      });
-      await db.outbox.put({
-        id: key,
-        table,
-        recordId: id,
-        data,
-        createdAt: timestamp,
-        order: sequence,
-        attempts: 0,
-        status: 'pending',
-      });
-    });
-
-    notify();
-    return key;
+    const [key] = await saveRecords([{ table, id, data }]);
+    return key!;
   }
 
   async function pendingCount(): Promise<number> {
@@ -358,6 +384,7 @@ export function createSyncClient(options: SyncClientOptions): SyncClient {
 
   return {
     saveRecord,
+    saveRecords,
     pendingCount,
     attention,
     getCursor: readCursor,

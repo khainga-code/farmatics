@@ -19,14 +19,17 @@ import { useAuth } from '../auth.js';
 import { AppLayout } from '../components/AppLayout.js';
 import { Alert, Badge, Button, Field } from '../components/ui.js';
 import {
+  allocationBalanceFor,
   balanceFor,
   feedUsedBy,
   onHandFor,
+  toAllocations,
   toBatches,
   toExpenseApprovals,
   toExpenses,
   toHouses,
   toMortality,
+  toReturns,
   toSales,
   toStockItems,
   toStockMovements,
@@ -50,7 +53,7 @@ interface HistoryRow {
 
 export function BatchPage() {
   const { batchId } = useParams<{ batchId: string }>();
-  const { can, online } = useAuth();
+  const { user, can, online } = useAuth();
   const { data, loading } = useFarmData();
 
   const [action, setAction] = useState<Action>(null);
@@ -74,6 +77,7 @@ export function BatchPage() {
   const house = houses.find((item) => item.id === batch.houseId);
   const mortality = toMortality(data.mortality_events);
   const sales = toSales(data.bird_sales);
+  const returns = toReturns(data.bird_returns);
   const transfers = toTransfers(data.bird_transfers);
   const vaccinations = toVaccinations(data.vaccination_events);
   const stockItems = toStockItems(data.stock_items);
@@ -90,6 +94,20 @@ export function BatchPage() {
   const day = Math.max(batchDay(batch.arrivalDate, today), 1);
   const sellable = canSellOn(batch.arrivalDate, today);
   const feedUsed = feedUsedBy(batch.id, movements);
+
+  // A salesperson sells from their own allocation; the owner and manager may
+  // record a walk-in sale without one.
+  const saleAllocations = toAllocations(data.sales_allocations)
+    .filter((allocation) => allocation.batchId === batch.id)
+    .filter(
+      (allocation) => user?.role !== 'salesperson' || allocation.salespersonId === user?.id,
+    )
+    .map((allocation) => ({
+      id: allocation.id,
+      ...allocationBalanceFor(allocation, sales, returns),
+    }))
+    .filter((allocation) => allocation.remaining > 0);
+  const saleNeedsAllocation = user?.role === 'salesperson';
 
   const schedule = vaccinationSchedule(batch.arrivalDate);
   const doneDays = new Set(
@@ -310,7 +328,11 @@ export function BatchPage() {
               </Button>
             )}
             {can('record_sale') && (
-              <Button variant="ghost" onClick={() => setAction('sale')} disabled={!sellable}>
+              <Button
+                variant="ghost"
+                onClick={() => setAction('sale')}
+                disabled={!sellable || (saleNeedsAllocation && saleAllocations.length === 0)}
+              >
                 Record sale
               </Button>
             )}
@@ -363,6 +385,8 @@ export function BatchPage() {
           )}
           {action === 'sale' && (
             <SaleForm
+              allocations={saleAllocations}
+              allocationRequired={saleNeedsAllocation}
               onCancel={() => setAction(null)}
               busy={busy}
               onSave={async (payload) => {
@@ -606,20 +630,31 @@ function TransferForm({
   );
 }
 
+interface SaleAllocationOption {
+  id: string;
+  remaining: number;
+}
+
 function SaleForm({
+  allocations = [],
+  allocationRequired = false,
   onSave,
   onCancel,
   busy,
 }: {
+  allocations?: SaleAllocationOption[];
+  allocationRequired?: boolean;
   onSave: (payload: {
     count: number;
     buyer?: string;
     note?: string;
     unitPriceKes?: number;
+    allocationId?: string;
   }) => void;
   onCancel: () => void;
   busy: boolean;
 }) {
+  const [allocationId, setAllocationId] = useState(allocations[0]?.id ?? '');
   const [count, setCount] = useState('');
   const [price, setPrice] = useState('');
   const [buyer, setBuyer] = useState('');
@@ -627,6 +662,7 @@ function SaleForm({
 
   const total = Number(count) * Number(price);
   const showTotal = Number.isFinite(total) && total > 0;
+  const missingAllocation = allocationRequired && !allocationId;
 
   return (
     <FormShell title="Record sale" onCancel={onCancel}>
@@ -634,15 +670,36 @@ function SaleForm({
         className="form form--inline"
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
+          if (missingAllocation) return;
           onSave({
             count: Number(count),
             buyer: buyer.trim() || undefined,
             note: note.trim() || undefined,
             unitPriceKes: price.trim() ? Number(price) : undefined,
+            allocationId: allocationRequired ? allocationId : undefined,
           });
         }}
         noValidate
       >
+        {allocationRequired && (
+          <div className="field">
+            <label className="field-label" htmlFor="sale-form-allocation">
+              Allocated birds
+            </label>
+            <select
+              id="sale-form-allocation"
+              className="input"
+              value={allocationId}
+              onChange={(event) => setAllocationId(event.target.value)}
+            >
+              {allocations.map((allocation) => (
+                <option key={allocation.id} value={allocation.id}>
+                  {allocation.remaining} left
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <Field
           label="Birds sold"
           type="number"
@@ -664,10 +721,16 @@ function SaleForm({
         />
         <Field label="Buyer" value={buyer} onChange={(event) => setBuyer(event.target.value)} />
         <Field label="Note" value={note} onChange={(event) => setNote(event.target.value)} />
-        <Button type="submit" loading={busy}>
+        <Button type="submit" loading={busy} disabled={missingAllocation}>
           Save
         </Button>
       </form>
+      {missingAllocation && (
+        <p className="muted">
+          No birds are allocated to you on this batch. Ask the farm manager for an allocation on
+          the Sales screen.
+        </p>
+      )}
     </FormShell>
   );
 }
