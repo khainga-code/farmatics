@@ -178,7 +178,7 @@ Neon or any Postgres. Nothing above the driver layer changes.
 | Pull access | `apps/api/test/pull-access.test.ts` | Which roles receive expenses, approvals and sale prices |
 | Throttle | `apps/api/test/throttle.test.ts` | Sliding window, no extension on rejection, reset, per-key independence |
 | Two phones | `apps/api/test/two-phone.test.ts` | Both phones offline, both write, both reconnect |
-| Web | `apps/web/test` | Money selectors and the service-worker build revision |
+| Web | `apps/web/test` | Money selectors, period report arithmetic and finance gating, CSV escaping, navigation and the service-worker build revision |
 
 API tests drive the real Fastify app against an in-memory Postgres, so routes,
 validation, hashing and SQL all execute. Only the SMS sender is stubbed.

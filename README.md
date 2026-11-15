@@ -8,14 +8,16 @@ they reconnect.
 
 **Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
 built. Phase 4 salesperson allocation built. Phase 5 health and phone-level
-privacy built. Phase 6 hardening built.** Accounts, roles, devices, the
+privacy built. Phase 6 hardening built. Phase 7 reports and analytics built.**
+Accounts, roles, devices, the
 sync engine and offline PIN unlock work end to end. Poultry batches, mortality,
 transfers, sales, vaccinations and the feed store now sit on that foundation,
 with a cash book for sales revenue, expenses and approvals, allocations
 that keep a salesperson selling only from the birds the farm gave them, a
 health screen that turns the flock's records into losses, survival and
-vaccination cover, and sign-in limits that follow the account rather than the
-network it is tried from.
+vaccination cover, sign-in limits that follow the account rather than the
+network it is tried from, and period reports that open offline and export to
+CSV.
 
 | Area | State |
 | --- | --- |
@@ -35,6 +37,7 @@ network it is tried from.
 | Health monitoring, mortality causes and vaccination compliance | Working, tested in shared |
 | Cash book hidden from phones without finance permission | Working, API tests written |
 | Per-account limits on register, verify and sign-in | Working, tested |
+| Period reports, CSV exports and print layout | Working, tested |
 
 ## Offline behaviour
 
@@ -105,6 +108,27 @@ Deaths can be tagged as disease, heat, cold, predator, injury, culling or
 unknown. Older deaths with no category are shown as uncategorised, never
 guessed.
 
+## Reports and analytics
+
+The Reports screen answers period questions from the records already on the
+phone. It offers this month, the last 7, 30 or 90 days, and shows birds sold,
+deaths and mortality rate, feed used, batch performance, deaths by cause and
+batch, money in and out by day or week, spend by category, and each
+salesperson's handovers, sales still out and feed.
+
+Revenue counts priced sales only, and an unpriced sale is reported rather than
+counted as zero. Spend counts approved expenses only, with pending ones named
+separately. Live birds is where the flock stands now; every other figure is
+scoped to the chosen period. Nothing extra is stored or fetched, so the report
+works offline and is as fresh as the last sync.
+
+Each section exports to CSV in the browser, with spreadsheet-formula prefixes
+neutralised, and the whole report has a print layout. A member with
+`view_reports` but no finance permission gets the operational report with no
+money figures and no price columns in the exports.
+
+The full rule set is in [`docs/PHASE-7.md`](./docs/PHASE-7.md).
+
 ## Who sees what
 
 The pull only carries the tables a member may read. Expenses and their
@@ -114,7 +138,9 @@ person's rights change, the phone pushes any queued work, rebuilds its local
 copy and pulls again.
 
 Sales are still pulled by everyone because bird counts drive every batch
-balance; the sale price travels with them.
+balance; the sale price travels with them. The Reports route additionally
+requires `view_reports`, and the money inside a report is only calculated for a
+member who may see the cash book.
 
 The full rule set is in [`docs/PHASE-5.md`](./docs/PHASE-5.md).
 
@@ -190,6 +216,7 @@ docs/
   PHASE-4.md        Salesperson allocation: birds, feed, sales, returns
   PHASE-5.md        Health monitoring and phone-level privacy
   PHASE-6.md        Hardening: per-account limits and a revisioned shell
+  PHASE-7.md        Reports: periods, CSV exports, print and privacy
 ```
 
 ## Configuration

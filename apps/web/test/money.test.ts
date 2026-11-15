@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { canSeeFinance, dayMoney, monthMoney, pendingExpenseCount } from '../src/money.js';
+import {
+  canSeeFinance,
+  dayMoney,
+  monthMoney,
+  pendingExpenseCount,
+  rangeMoney,
+} from '../src/money.js';
 
 /**
  * One set of money selectors for Home and Finance. Both screens used to do
@@ -62,6 +68,34 @@ describe('day money', () => {
       revenueKes: 0,
       spendKes: 0,
       netKes: 0,
+    });
+  });
+});
+
+describe('range money', () => {
+  it('includes both ends of the range and leaves the rest out', () => {
+    const money = rangeMoney(sales, expenses, approvals, '2026-05-01', '2026-05-02');
+    expect(money.revenueKes).toBe(10 * 500 + 5 * 600);
+    expect(money.spendKes).toBe(1200);
+    expect(money.netKes).toBe(6800);
+    expect(money.unpricedSales).toBe(1);
+  });
+
+  it('agrees with the day and month selectors on the same edges', () => {
+    expect(rangeMoney(sales, expenses, approvals, '2026-05-01', '2026-05-01')).toEqual(
+      dayMoney(sales, expenses, approvals, '2026-05-01'),
+    );
+    expect(rangeMoney(sales, expenses, approvals, '2026-05-01', '2026-05-31')).toEqual(
+      monthMoney(sales, expenses, approvals, '2026-05-14'),
+    );
+  });
+
+  it('returns zeros for a range with nothing in it', () => {
+    expect(rangeMoney(sales, expenses, approvals, '2026-03-01', '2026-03-31')).toMatchObject({
+      revenueKes: 0,
+      spendKes: 0,
+      netKes: 0,
+      unpricedSales: 0,
     });
   });
 });

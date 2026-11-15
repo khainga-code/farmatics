@@ -41,6 +41,13 @@ export const NAV: NavItem[] = [
     end: false,
     permissions: ['view_finance', 'record_expense'],
   },
+  {
+    to: '/reports',
+    label: 'Reports',
+    icon: 'reports',
+    end: false,
+    permissions: ['view_reports'],
+  },
 ];
 
 export function visibleNav(permissions: readonly Permission[]): NavItem[] {

@@ -12,6 +12,7 @@ import { HealthPage } from './pages/HealthPage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { PoultryPage } from './pages/PoultryPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
+import { ReportsPage } from './pages/ReportsPage.js';
 import { SalesPage } from './pages/SalesPage.js';
 import { StaffLoginPage } from './pages/StaffLoginPage.js';
 import { StorePage } from './pages/StorePage.js';
@@ -128,6 +129,16 @@ export function App() {
           <RequireAuth>
             <RequirePermission anyOf={['view_finance', 'record_expense']}>
               <FinancePage />
+            </RequirePermission>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <RequireAuth>
+            <RequirePermission anyOf={['view_reports']}>
+              <ReportsPage />
             </RequirePermission>
           </RequireAuth>
         }

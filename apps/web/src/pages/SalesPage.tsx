@@ -24,6 +24,7 @@ import {
   type SalesAllocation,
 } from '../local.js';
 import { saveAndConfirm } from '../save.js';
+import { cacheTeam, cachedTeam } from '../team.js';
 import { notify } from '../toast.js';
 import { formatKes } from './FinancePage.js';
 import { formatDate } from './PoultryPage.js';
@@ -38,18 +39,6 @@ import { formatDate } from './PoultryPage.js';
  */
 
 type Action = 'allocate' | 'sell' | 'return' | null;
-
-const TEAM_CACHE = 'farmatics.team';
-
-function cachedTeam(): UserDto[] {
-  try {
-    const raw = localStorage.getItem(TEAM_CACHE);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as UserDto[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 export function SalesPage() {
   const { user, can, online } = useAuth();
@@ -93,11 +82,7 @@ export function SalesPage() {
         if (cancelled) return;
         setTeam(employees);
         setTeamError(null);
-        try {
-          localStorage.setItem(TEAM_CACHE, JSON.stringify(employees));
-        } catch {
-          // The cache is a convenience; a full disk must not break the screen.
-        }
+        cacheTeam(employees);
       })
       .catch((caught) => {
         if (!cancelled) {

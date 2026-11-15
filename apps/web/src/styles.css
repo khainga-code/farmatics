@@ -387,6 +387,10 @@ select.input {
   .toast {
     animation: none;
   }
+
+  .tabbar-icon {
+    transition: none;
+  }
 }
 
 .pin-actions {
@@ -931,5 +935,320 @@ a.btn {
   .auth-card {
     padding: 24px 20px 20px;
     border-radius: 16px;
+  }
+}
+
+/* -------------------------------------------------------------- reports --- */
+
+.reports-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.period-picker {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.period-option {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.period-option:hover {
+  background: var(--green-50);
+  color: var(--green-900);
+}
+
+.period-option--active {
+  background: var(--green-100);
+  color: var(--green-900);
+}
+
+/* The shell stretches page buttons on a phone; the toolbar keeps Print small. */
+.reports-toolbar .btn {
+  width: auto;
+  margin-left: auto;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.head-actions .btn {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+.report-table-wrap {
+  overflow-x: auto;
+  margin: 0 -2px;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.report-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.report-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.report-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.report-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.report-cell-title {
+  font-weight: 650;
+}
+
+.report-row--closed td {
+  color: var(--muted);
+}
+
+/* CSS-only trend bars: no chart library on the phone. */
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 120px;
+  padding: 8px 2px 0;
+  overflow-x: auto;
+}
+
+.trend-bucket {
+  flex: 1 1 0;
+  min-width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.trend-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 96px;
+  width: 100%;
+}
+
+.trend-bar {
+  width: 46%;
+  max-width: 18px;
+  border-radius: 4px 4px 0 0;
+  background: var(--green-600);
+}
+
+.trend-bar--out {
+  background: #c28a17;
+}
+
+.trend-label {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.trend-numbers {
+  display: none;
+}
+
+.trend-key {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.trend-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 2px;
+  background: var(--green-600);
+}
+
+.trend-swatch--out {
+  background: #c28a17;
+}
+
+.print-only {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .reports-toolbar {
+    align-items: flex-start;
+  }
+
+  .period-picker {
+    width: 100%;
+  }
+
+  .period-option {
+    flex: 1 0 auto;
+    text-align: center;
+  }
+}
+
+/* Seven tabs have to share a 320px phone. */
+@media (max-width: 420px) {
+  .tabbar {
+    gap: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  .tabbar-link {
+    font-size: 9.5px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .tabbar-icon {
+    width: 32px;
+    height: 24px;
+  }
+
+  .tabbar-link svg {
+    width: 19px;
+    height: 19px;
+  }
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff;
+    font-size: 11pt;
+  }
+
+  .app-shell {
+    width: 100%;
+    padding: 0;
+  }
+
+  .app-header,
+  .nav,
+  .tabbar,
+  .page-actions,
+  .reports-toolbar,
+  .no-print,
+  .toast {
+    display: none !important;
+  }
+
+  .app-main {
+    display: block;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .report-print-meta {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 9.5pt;
+  }
+
+  .card {
+    border: none;
+    border-radius: 0;
+    break-inside: avoid;
+    margin-bottom: 10mm;
+  }
+
+  .card-head {
+    padding: 0 0 4px;
+    border-bottom: 1px solid #999;
+    background: transparent;
+  }
+
+  .card-body {
+    padding: 8px 0 0;
+  }
+
+  .report-table {
+    font-size: 9.5pt;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 4px 6px;
+    border-color: #ccc;
+  }
+
+  .report-table-wrap {
+    overflow: visible;
+  }
+
+  .trend {
+    overflow: visible;
+    min-height: 0;
+  }
+
+  .trend-numbers {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 8pt;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .badge,
+  .chip {
+    border: 1px solid #bbb;
+    background: transparent;
   }
 }

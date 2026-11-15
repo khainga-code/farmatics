@@ -92,6 +92,20 @@ export function monthMoney(
   );
 }
 
+/** An inclusive range of calendar days, each given as `YYYY-MM-DD`. */
+export function rangeMoney(
+  sales: ReadonlyArray<MoneySale>,
+  expenses: ReadonlyArray<MoneyExpense>,
+  approvals: ReadonlyArray<ExpenseApprovalLike>,
+  startDay: string,
+  endDay: string,
+): PeriodMoney {
+  return periodMoney(sales, expenses, approvals, (recordedAt) => {
+    const day = recordedAt.slice(0, 10);
+    return day >= startDay && day <= endDay;
+  });
+}
+
 export function pendingExpenseCount(
   expenses: ReadonlyArray<{ id: string }>,
   approvals: ReadonlyArray<ExpenseApprovalLike>,

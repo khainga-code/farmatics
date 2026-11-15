@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
  * every link carries its own text label.
  */
 
-export type IconName = 'home' | 'poultry' | 'health' | 'store' | 'sales' | 'finance';
+export type IconName = 'home' | 'poultry' | 'health' | 'store' | 'sales' | 'finance' | 'reports';
 
 const GLYPHS: Record<IconName, ReactNode> = {
   home: (
@@ -35,6 +35,14 @@ const GLYPHS: Record<IconName, ReactNode> = {
       <rect x="3" y="6.5" width="18" height="11" rx="2.5" />
       <circle cx="12" cy="12" r="2.4" />
       <path d="M6.6 12h.01M17.4 12h.01" />
+    </>
+  ),
+  reports: (
+    <>
+      <path d="M5 20V11" />
+      <path d="M12 20V4" />
+      <path d="M19 20v-6" />
+      <path d="M3.5 20h17" />
     </>
   ),
 };
