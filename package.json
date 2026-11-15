@@ -7,6 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "postinstall": "node tools/ci-web-build.mjs",
     "dev": "turbo run dev",
     "dev:api": "pnpm --filter @farmatics/api dev",
     "dev:web": "pnpm --filter @farmatics/web dev",

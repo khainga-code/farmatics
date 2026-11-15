@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "farmatics",
+  "compatibility_date": "2026-11-01",
+  /* Workers Builds runs `wrangler deploy` from the repo root, so the root
+     needs its own config to reach the app's build. */
+  "assets": {
+    "directory": "./apps/web/dist",
+    "not_found_handling": "single-page-application"
+  }
+}
