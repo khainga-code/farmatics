@@ -8,7 +8,8 @@ they reconnect.
 
 **Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
 built. Phase 4 salesperson allocation built. Phase 5 health and phone-level
-privacy built. Phase 6 hardening built. Phase 7 reports and analytics built.**
+privacy built. Phase 6 hardening built. Phase 7 reports and analytics built.
+Phase 8 production deployment prepared.**
 Accounts, roles, devices, the
 sync engine and offline PIN unlock work end to end. Poultry batches, mortality,
 transfers, sales, vaccinations and the feed store now sit on that foundation,
@@ -38,6 +39,7 @@ CSV.
 | Cash book hidden from phones without finance permission | Working, API tests written |
 | Per-account limits on register, verify and sign-in | Working, tested |
 | Period reports, CSV exports and print layout | Working, tested |
+| Production API image, config guards and runbook | Prepared; hosting not wired |
 
 ## Offline behaviour
 
@@ -144,6 +146,21 @@ member who may see the cash book.
 
 The full rule set is in [`docs/PHASE-5.md`](./docs/PHASE-5.md).
 
+## Going live
+
+The browser app deploys to Cloudflare Workers as static assets. The API runs as
+a container against Postgres; the two are separate origins joined by
+`VITE_API_URL` and `CORS_ORIGINS`. Production refuses to start on an implicit or
+plain-http browser origin, warns while the embedded database or stub SMS sender
+is still in use, and refuses to seed demo accounts. The web build fails when
+`VITE_API_URL` is missing rather than shipping an app that cannot sign in.
+
+The database needs two roles: the owner for migrations and auth, and the
+RLS-restricted `farmatics_app` for everything else. Create the restricted role
+with its own password before running migrations. The runbook - environment
+matrix, first-run checklist, backups and rollback - is in
+[`docs/PHASE-8.md`](./docs/PHASE-8.md).
+
 ## Requirements
 
 - Node.js 22 or newer
@@ -202,7 +219,7 @@ machine.
 
 ```
 apps/
-  api/        Fastify API, auth, validation, sync push and pull
+  api/        Fastify API, auth, validation, sync push and pull; Dockerfile for production
   web/        React + TypeScript app, installable as a PWA
 packages/
   shared/     Zod schemas, DTOs, permissions, sync wire contract, poultry and finance rules
@@ -217,6 +234,7 @@ docs/
   PHASE-5.md        Health monitoring and phone-level privacy
   PHASE-6.md        Hardening: per-account limits and a revisioned shell
   PHASE-7.md        Reports: periods, CSV exports, print and privacy
+  PHASE-8.md        Going live: roles, environment, deploy, backups, rollback
 ```
 
 ## Configuration
@@ -227,6 +245,10 @@ without it.
 To run against a real Postgres (staging or production), set `DATABASE_URL` to
 the RLS-restricted role and `DATABASE_ADMIN_URL` to the owner role. Leaving
 both unset uses the embedded database.
+
+The browser app does not read `.env`. It bakes `VITE_API_URL` into the bundle
+at build time, and a production build refuses to run without it. See
+[`docs/PHASE-8.md`](./docs/PHASE-8.md).
 
 ## Licence
 

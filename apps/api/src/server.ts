@@ -25,6 +25,21 @@ if (
   );
 }
 
+if (config.isProduction && db.driver === 'embedded') {
+  console.warn(
+    '[security] Production is using the embedded database. Its files live on this ' +
+      'machine, so replacing the machine loses the farm. Point DATABASE_URL and ' +
+      'DATABASE_ADMIN_URL at Postgres.',
+  );
+}
+
+if (config.isProduction && config.smsProvider === 'stub') {
+  console.warn(
+    '[security] SMS_PROVIDER=stub in production: one-time codes are written to the ' +
+      'server log and never sent to a phone.',
+  );
+}
+
 const app = await buildApp({ config, db, sms: createSmsSender(config.smsProvider) });
 
 async function shutdown(signal: string): Promise<void> {

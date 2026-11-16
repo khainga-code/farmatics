@@ -6,6 +6,14 @@ import { loadEnv } from './load-env.js';
 
 loadEnv();
 
+if (process.env['NODE_ENV'] === 'production') {
+  console.error(
+    'Refusing to seed demo accounts with NODE_ENV=production. ' +
+      'Register the owner on the live site instead.',
+  );
+  process.exit(1);
+}
+
 const OWNER_PHONE = '+254700000001';
 const OWNER_PASSWORD = 'farmatics2026';
 const EMPLOYEE_USERNAME = 'joseph';

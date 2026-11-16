@@ -36,10 +36,28 @@ export interface AppConfig {
   rateLimitEnabled: boolean;
 }
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required environment variable ${name}`);
-  return value;
+function loadCorsOrigins(isProduction: boolean): string[] {
+  const raw = process.env['CORS_ORIGINS'];
+
+  if (isProduction && !raw) {
+    throw new Error(
+      'CORS_ORIGINS must list the browser origin in production, for example https://farm.example.com',
+    );
+  }
+
+  const origins = (raw ?? 'http://localhost:5173')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (isProduction) {
+    const insecure = origins.filter((origin) => !origin.startsWith('https://'));
+    if (insecure.length > 0) {
+      throw new Error(`CORS_ORIGINS must use https in production: ${insecure.join(', ')}`);
+    }
+  }
+
+  return origins;
 }
 
 export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -56,10 +74,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     isProduction,
     port: Number(process.env['PORT'] ?? 4000),
     host: process.env['HOST'] ?? '0.0.0.0',
-    corsOrigins: (process.env['CORS_ORIGINS'] ?? 'http://localhost:5173')
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean),
+    corsOrigins: loadCorsOrigins(isProduction),
     jwtSecret: jwtSecret || 'development-only-insecure-secret-change-me',
     accessTokenTtlSeconds: Number(process.env['ACCESS_TOKEN_TTL_MINUTES'] ?? 15) * 60,
     refreshTokenTtlDays: Number(process.env['REFRESH_TOKEN_TTL_DAYS'] ?? 30),

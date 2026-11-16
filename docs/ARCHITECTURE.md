@@ -164,6 +164,20 @@ with no server to install. `packages/db` hides the difference behind a small
 Production sets `DATABASE_URL` and uses the standard `postgres` driver against
 Neon or any Postgres. Nothing above the driver layer changes.
 
+## Deployment
+
+The web app ships as static assets on Cloudflare Workers, and the API runs as a
+container against Postgres. The database has two logins: the owner runs
+migrations and auth, and the restricted `farmatics_app` login keeps RLS in
+force for farm data.
+
+The web origin and the API origin are different, joined by `VITE_API_URL` baked
+into the bundle at build time and `CORS_ORIGINS` checked at run time.
+Production refuses an implicit or plain-http browser origin, and the web build
+refuses a missing API URL. Run one API instance: the per-account limiter is
+process memory. The deploy, backup and rollback steps are in
+[`PHASE-8.md`](./PHASE-8.md).
+
 ## Testing
 
 | Layer | Where | Covers |

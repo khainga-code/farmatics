@@ -54,6 +54,10 @@ jobs:
         run: pnpm --filter @farmatics/web test
 
       - name: Production web build
+        env:
+          # The build refuses to run without an API origin. This value is only
+          # baked into the CI bundle and never deployed.
+          VITE_API_URL: https://api.example.test
         run: pnpm --filter @farmatics/web build
 
       - name: Service worker was generated
