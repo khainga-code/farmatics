@@ -3,12 +3,15 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   MORTALITY_CAUSE_CATEGORIES,
   MORTALITY_CAUSE_LABELS,
+  SPECIES_LABELS,
+  animalWord,
   batchDay,
   batchFinance,
   canSellOn,
   feedCostKes,
   feedPerKgSoldKg,
   latestWeight,
+  maxWeightKg,
   mortalityInputSchema,
   reminderIsDue,
   saleInputSchema,
@@ -21,6 +24,7 @@ import {
   vaccinationState,
   weightInputSchema,
   type MortalityCauseCategory,
+  type Species,
 } from '@farmatics/shared';
 import { useAuth } from '../auth.js';
 import { AppLayout } from '../components/AppLayout.js';
@@ -94,6 +98,9 @@ export function BatchPage() {
   const weights = toWeights(data.batch_weights).filter((sample) => sample.batchId === batch.id);
 
   const balance = balanceFor(batch, mortality, sales, transfers);
+  const species = batch.species;
+  const isPoultryBatch = species === 'poultry';
+  const animal = (value: number) => animalWord(species, value);
   const feed = feedCostKes(
     movements.filter((movement) => movement.kind === 'issue' && movement.batchId === batch.id),
     movements,
@@ -107,7 +114,7 @@ export function BatchPage() {
   );
   const today = toDateOnly(new Date());
   const day = Math.max(batchDay(batch.arrivalDate, today), 1);
-  const sellable = canSellOn(batch.arrivalDate, today);
+  const sellable = canSellOn(batch.arrivalDate, today, species);
   const feedUsed = feedUsedBy(batch.id, movements);
   const latest = latestWeight(weights);
   const feedPerKgSold = latest
@@ -128,9 +135,12 @@ export function BatchPage() {
     .filter((allocation) => allocation.remaining > 0);
   const saleNeedsAllocation = user?.role === 'salesperson';
 
-  const schedule = vaccinationSchedule(batch.arrivalDate);
+  const schedule = isPoultryBatch ? vaccinationSchedule(batch.arrivalDate) : [];
   const doneDays = new Set(
     vaccinations.filter((event) => event.batchId === batch.id).map((event) => event.day),
+  );
+  const transferTargets = batches.filter(
+    (item) => item.id !== batch.id && item.species === species,
   );
 
   const history: HistoryRow[] = [
@@ -139,7 +149,7 @@ export function BatchPage() {
       .map((event) => ({
         id: event.id,
         at: event.recordedAt,
-        title: `Mortality: ${event.count} birds`,
+        title: `Mortality: ${event.count} ${animal(event.count)}`,
         detail:
           [
             event.causeCategory ? MORTALITY_CAUSE_LABELS[event.causeCategory] : null,
@@ -154,7 +164,7 @@ export function BatchPage() {
       .map((event) => ({
         id: event.id,
         at: event.recordedAt,
-        title: `Sale: ${event.count} birds`,
+        title: `Sale: ${event.count} ${animal(event.count)}`,
         detail: event.buyer ? `Buyer: ${event.buyer}` : 'No buyer recorded',
         tone: 'green' as const,
       })),
@@ -165,8 +175,8 @@ export function BatchPage() {
         at: event.recordedAt,
         title:
           event.fromBatchId === batch.id
-            ? `Transferred out: ${event.count} birds`
-            : `Transferred in: ${event.count} birds`,
+            ? `Transferred out: ${event.count} ${animal(event.count)}`
+            : `Transferred in: ${event.count} ${animal(event.count)}`,
         detail:
           batches.find(
             (item) =>
@@ -198,7 +208,7 @@ export function BatchPage() {
       id: sample.id,
       at: sample.recordedAt,
       title: `Weight check: ${sample.averageWeightKg} kg average`,
-      detail: `${sample.sampleCount} bird${sample.sampleCount === 1 ? '' : 's'} weighed${
+      detail: `${sample.sampleCount} ${animal(sample.sampleCount)} weighed${
         sample.note ? ` · ${sample.note}` : ''
       }`,
       tone: 'neutral' as const,
@@ -237,7 +247,7 @@ export function BatchPage() {
   return (
     <AppLayout
       title={batch.code}
-      subtitle={`${house?.name ?? 'House'} · arrived ${formatDate(batch.arrivalDate)}`}
+      subtitle={`${SPECIES_LABELS[species]} · ${house?.name ?? 'House'} · arrived ${formatDate(batch.arrivalDate)}`}
       actions={
         <Link className="btn btn--ghost" to="/poultry">
           Back to batches
@@ -251,13 +261,14 @@ export function BatchPage() {
           <h2 className="card-title">This batch</h2>
           <div className="chips">
             <Badge tone={sellable ? 'green' : 'neutral'}>Day {day}</Badge>
+            <Badge>{SPECIES_LABELS[species]}</Badge>
             {batch.dirty && <Badge tone="amber">Not sent</Badge>}
             {batch.status === 'closed' && <Badge>Closed</Badge>}
           </div>
         </div>
         <div className="card-body">
           <div className="status-grid">
-            <Stat label="Birds alive" value={balance.live} />
+            <Stat label="Animals alive" value={balance.live} />
             <Stat label="Arrived" value={balance.initial} />
             <Stat label="Mortality" value={balance.mortality} />
             <Stat label="Sold" value={balance.sold} />
@@ -274,21 +285,26 @@ export function BatchPage() {
           </div>
           {latest && (
             <p className="muted">
-              Average weight from {latest.sampleCount} bird
-              {latest.sampleCount === 1 ? '' : 's'} weighed{' '}
-              {formatDate(latest.recordedAt.slice(0, 10))}. Feed per kg sold values every bird
+              Average weight from {latest.sampleCount} {animal(latest.sampleCount)} weighed{' '}
+              {formatDate(latest.recordedAt.slice(0, 10))}. Feed per kg sold values every animal
               sold at that latest average.
             </p>
           )}
-          {sellable ? (
-            <Alert tone="success">
-              Brooding finished. Birds from this batch may be sold from{' '}
-              {formatDate(saleOpensOn(batch.arrivalDate))}.
-            </Alert>
+          {isPoultryBatch ? (
+            sellable ? (
+              <Alert tone="success">
+                Brooding finished. Birds from this batch may be sold from{' '}
+                {formatDate(saleOpensOn(batch.arrivalDate))}.
+              </Alert>
+            ) : (
+              <Alert tone="info">
+                Brooding until {formatDate(saleOpensOn(batch.arrivalDate))} (day 22). Sales
+                recorded before then will be refused.
+              </Alert>
+            )
           ) : (
-            <Alert tone="info">
-              Brooding until {formatDate(saleOpensOn(batch.arrivalDate))} (day 22). Sales recorded
-              before then will be refused.
+            <Alert tone="success">
+              No brooding period. {SPECIES_LABELS[species]} may be sold from the arrival day.
             </Alert>
           )}
         </div>
@@ -344,45 +360,46 @@ export function BatchPage() {
         </section>
       )}
 
-      <section className="card">
-        <div className="card-head">
-          <h2 className="card-title">Vaccinations</h2>
-        </div>
-        <div className="card-body">
-          <ul className="list">
-            {schedule.map((dose) => {
-              const done = doneDays.has(dose.day);
-              const state = vaccinationState(dose, today, done);
-              return (
-                <li className="list-item" key={dose.day}>
-                  <div>
-                    <div className="list-title">
-                      {dose.label}
-                      <Badge tone={state === 'done' ? 'green' : state === 'overdue' ? 'red' : 'amber'}>
-                        {state === 'done' ? 'Done' : state}
-                      </Badge>
+      {isPoultryBatch && (
+        <section className="card">
+          <div className="card-head">
+            <h2 className="card-title">Vaccinations</h2>
+          </div>
+          <div className="card-body">
+            <ul className="list">
+              {schedule.map((dose) => {
+                const done = doneDays.has(dose.day);
+                const state = vaccinationState(dose, today, done);
+                return (
+                  <li className="list-item" key={dose.day}>
+                    <div>
+                      <div className="list-title">
+                        {dose.label}
+                        <Badge
+                          tone={state === 'done' ? 'green' : state === 'overdue' ? 'red' : 'amber'}
+                        >
+                          {state === 'done' ? 'Done' : state}
+                        </Badge>
+                      </div>
+                      <div className="list-sub">
+                        Due {formatDate(dose.dueOn)}
+                        {!done && reminderIsDue(dose, today) && ' · reminder is open'}
+                      </div>
                     </div>
-                    <div className="list-sub">
-                      Due {formatDate(dose.dueOn)}
-                      {!done && reminderIsDue(dose, today) && ' · reminder is open'}
-                    </div>
-                  </div>
-                  {!done && can('record_vaccination') && (
-                    <div className="list-actions">
-                      <Button
-                        variant="ghost"
-                        onClick={() => start('vaccination')}
-                      >
-                        Record
-                      </Button>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </section>
+                    {!done && can('record_vaccination') && (
+                      <div className="list-actions">
+                        <Button variant="ghost" onClick={() => start('vaccination')}>
+                          Record
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="card-head">
@@ -396,8 +413,12 @@ export function BatchPage() {
               </Button>
             )}
             {can('record_transfer') && (
-              <Button variant="ghost" onClick={() => start('transfer')}>
-                Transfer birds
+              <Button
+                variant="ghost"
+                onClick={() => start('transfer')}
+                disabled={transferTargets.length === 0}
+              >
+                Transfer animals
               </Button>
             )}
             {can('record_sale') && (
@@ -422,6 +443,7 @@ export function BatchPage() {
           </div>
           {action === 'mortality' && (
             <MortalityForm
+              species={species}
               onCancel={() => setAction(null)}
               onSave={async (payload) => {
                 const parsed = mortalityInputSchema.safeParse({
@@ -442,7 +464,8 @@ export function BatchPage() {
           )}
           {action === 'transfer' && (
             <TransferForm
-              batches={batches.filter((item) => item.id !== batch.id)}
+              batches={transferTargets}
+              species={species}
               onCancel={() => setAction(null)}
               busy={busy}
               onSave={async (payload) => {
@@ -465,6 +488,7 @@ export function BatchPage() {
             <SaleForm
               allocations={saleAllocations}
               allocationRequired={saleNeedsAllocation}
+              species={species}
               onCancel={() => setAction(null)}
               busy={busy}
               onSave={async (payload) => {
@@ -532,6 +556,7 @@ export function BatchPage() {
           {action === 'weight' && (
             <WeightForm
               last={latest}
+              species={species}
               onCancel={() => setAction(null)}
               busy={busy}
               onSave={async (payload) => {
@@ -622,10 +647,12 @@ function FormShell({
 }
 
 function MortalityForm({
+  species,
   onSave,
   onCancel,
   busy,
 }: {
+  species: Species;
   onSave: (payload: {
     count: number;
     cause?: string;
@@ -653,7 +680,7 @@ function MortalityForm({
         noValidate
       >
         <Field
-          label="Birds lost"
+          label={`${SPECIES_LABELS[species]} lost`}
           type="number"
           inputMode="numeric"
           min={1}
@@ -697,11 +724,13 @@ function MortalityForm({
 
 function TransferForm({
   batches,
+  species,
   onSave,
   onCancel,
   busy,
 }: {
   batches: ReturnType<typeof toBatches>;
+  species: Species;
   onSave: (payload: { toBatchId: string; count: number; note?: string }) => void;
   onCancel: () => void;
   busy: boolean;
@@ -711,7 +740,7 @@ function TransferForm({
   const [note, setNote] = useState('');
 
   return (
-    <FormShell title="Transfer birds" onCancel={onCancel}>
+    <FormShell title={`Transfer ${animalWord(species, 2)}`} onCancel={onCancel}>
       <form
         className="form form--inline"
         onSubmit={(event: FormEvent) => {
@@ -738,7 +767,7 @@ function TransferForm({
           </select>
         </div>
         <Field
-          label="Birds"
+          label="Animals"
           type="number"
           inputMode="numeric"
           min={1}
@@ -752,7 +781,9 @@ function TransferForm({
         </Button>
       </form>
       {batches.length === 0 && (
-        <p className="muted">Add another batch first, then birds can be moved into it.</p>
+        <p className="muted">
+          Add another batch of the same species first, then animals can be moved into it.
+        </p>
       )}
     </FormShell>
   );
@@ -766,12 +797,14 @@ interface SaleAllocationOption {
 function SaleForm({
   allocations = [],
   allocationRequired = false,
+  species,
   onSave,
   onCancel,
   busy,
 }: {
   allocations?: SaleAllocationOption[];
   allocationRequired?: boolean;
+  species: Species;
   onSave: (payload: {
     count: number;
     buyer?: string;
@@ -812,7 +845,7 @@ function SaleForm({
         {allocationRequired && (
           <div className="field">
             <label className="field-label" htmlFor="sale-form-allocation">
-              Allocated birds
+              Allocated animals
             </label>
             <select
               id="sale-form-allocation"
@@ -829,7 +862,7 @@ function SaleForm({
           </div>
         )}
         <Field
-          label="Birds sold"
+          label={`${SPECIES_LABELS[species]} sold`}
           type="number"
           inputMode="numeric"
           min={1}
@@ -838,7 +871,7 @@ function SaleForm({
           required
         />
         <Field
-          label="Price per bird (KES)"
+          label="Price per animal (KES)"
           type="number"
           inputMode="decimal"
           min={0}
@@ -855,7 +888,7 @@ function SaleForm({
       </form>
       {missingAllocation && (
         <p className="muted">
-          No birds are allocated to you on this batch. Ask the farm manager for an allocation on
+          No animals are allocated to you on this batch. Ask the farm manager for an allocation on
           the Sales screen.
         </p>
       )}
@@ -913,11 +946,13 @@ function VaccinationForm({
 
 function WeightForm({
   last,
+  species,
   onSave,
   onCancel,
   busy,
 }: {
   last: ReturnType<typeof latestWeight>;
+  species: Species;
   onSave: (payload: { sampleCount: number; averageWeightKg: number; note?: string }) => void;
   onCancel: () => void;
   busy: boolean;
@@ -941,7 +976,7 @@ function WeightForm({
         noValidate
       >
         <Field
-          label="Birds weighed"
+          label="Animals weighed"
           type="number"
           inputMode="numeric"
           min={1}
@@ -955,13 +990,14 @@ function WeightForm({
           type="number"
           inputMode="decimal"
           min={0.01}
+          max={maxWeightKg(species)}
           step="0.01"
           value={averageWeight}
           onChange={(event) => setAverageWeight(event.target.value)}
           hint={
             last
               ? `Last reading ${last.averageWeightKg} kg on ${formatDate(last.recordedAt.slice(0, 10))}`
-              : undefined
+              : `${SPECIES_LABELS[species]} are recorded up to ${maxWeightKg(species)} kg.`
           }
           required
         />

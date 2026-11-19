@@ -32,8 +32,8 @@ import { formatDate } from './PoultryPage.js';
 /**
  * Salesperson allocation.
  *
- * The owner or farm manager gives birds to a salesperson; the salesperson sells
- * from that allocation and hands unsold birds back. All three are ordinary
+ * The owner or farm manager gives animals to a salesperson; the salesperson sells
+ * from that allocation and hands unsold animals back. All three are ordinary
  * queued writes, so the screen works in a shed with no signal. The balance is
  * derived from the events the phone already holds.
  */
@@ -136,7 +136,7 @@ export function SalesPage() {
   );
 
   return (
-    <AppLayout title="Sales" subtitle="Birds with salespeople, and what is left to sell">
+    <AppLayout title="Sales" subtitle="Animals with salespeople, and what is left to sell">
       {error && <Alert tone="error">{error}</Alert>}
 
       <section className="card">
@@ -149,7 +149,7 @@ export function SalesPage() {
                 onClick={() => start('allocate')}
                 disabled={batches.length === 0}
               >
-                Allocate birds
+                Allocate animals
               </Button>
             )}
             {canSell && open.length > 0 && (
@@ -159,7 +159,7 @@ export function SalesPage() {
             )}
             {canReturn && open.length > 0 && (
               <Button variant="ghost" onClick={() => start('return')}>
-                Return birds
+                Return animals
               </Button>
             )}
           </div>
@@ -170,8 +170,8 @@ export function SalesPage() {
           ) : visible.length === 0 ? (
             <p className="muted">
               {isSalesperson
-                ? 'No birds have been allocated to you yet. Your farm manager will hand them over here.'
-                : 'No allocations yet. Give a salesperson birds from a batch so they can sell.'}
+                ? 'No animals have been allocated to you yet. Your farm manager will hand them over here.'
+                : 'No allocations yet. Give a salesperson animals from a batch so they can sell.'}
             </p>
           ) : (
             <ul className="list">
@@ -197,8 +197,8 @@ export function SalesPage() {
 
           {visible.length > 0 && (
             <p className="muted">
-              {soldTotal} bird{soldTotal === 1 ? '' : 's'} sold from these allocations. Unsold birds
-              stay in the batch until they are sold or returned.
+              {soldTotal} animal{soldTotal === 1 ? '' : 's'} sold from these allocations. Unsold
+              animals stay in the batch until they are sold or returned.
             </p>
           )}
 
@@ -239,7 +239,7 @@ export function SalesPage() {
               { table: 'sales_allocations', id: allocationId, data: parsed.data },
             ];
 
-            // Feed leaves the store with the birds. It is an ordinary issue
+            // Feed leaves the store with the animals. It is an ordinary issue
             // tagged with the allocation and queued in the same transaction,
             // so the phone never sends one without the other.
             if (payload.feedKg !== undefined) {
@@ -266,8 +266,8 @@ export function SalesPage() {
             void saveRecords(
               records,
               payload.feedKg !== undefined
-                ? 'Birds and feed allocated'
-                : 'Birds allocated',
+                ? 'Animals and feed allocated'
+                : 'Animals allocated',
             );
           }}
         />
@@ -308,7 +308,7 @@ export function SalesPage() {
               return fail(parsed.error.issues[0]?.message ?? 'Check the return.');
             }
             setBusy(true);
-            void save('bird_returns', parsed.data, 'Birds returned');
+            void save('bird_returns', parsed.data, 'Animals returned');
           }}
         />
       )}
@@ -327,7 +327,7 @@ function AllocationRow({
   batchCode: string;
   salespersonName: string;
   balance: ReturnType<typeof allocationBalanceFor>;
-  /** Feed handed over with these birds, derived from the store. */
+  /** Feed handed over with these animals, derived from the store. */
   feedKg: number;
 }) {
   return (
@@ -415,8 +415,8 @@ function AllocateForm({
 
   return (
     <FormCard
-      title="Allocate birds"
-      note="Allocating does not change the batch count. The birds stay in the flock until the salesperson records a sale. Feed you hand over leaves the store now. You can allocate while offline once this phone has seen the team list."
+      title="Allocate animals"
+      note="Allocating does not change the batch count. The animals stay in the batch until the salesperson records a sale. Feed you hand over leaves the store now. You can allocate while offline once this phone has seen the team list."
       onCancel={onCancel}
     >
       <form
@@ -469,7 +469,7 @@ function AllocateForm({
           </select>
         </div>
         <Field
-          label="Birds"
+          label="Animals"
           type="number"
           inputMode="numeric"
           min={1}
@@ -530,11 +530,11 @@ function AllocateForm({
       )}
       {canFeed && stockItems.length === 0 && (
         <p className="muted">
-          No feed is on this phone yet. Receive stock first if you want to send feed with the birds.
+          No feed is on this phone yet. Receive stock first if you want to send feed with the animals.
         </p>
       )}
       {feedIncomplete && (
-        <p className="muted">Choose which feed went with the birds, or clear the weight.</p>
+        <p className="muted">Choose which feed went with the animals, or clear the weight.</p>
       )}
     </FormCard>
   );
@@ -612,7 +612,7 @@ function SellForm({
           </select>
         </div>
         <Field
-          label={`Birds sold${batch ? ` from ${batch.code}` : ''}`}
+          label={`Animals sold${batch ? ` from ${batch.code}` : ''}`}
           type="number"
           inputMode="numeric"
           min={1}
@@ -621,7 +621,7 @@ function SellForm({
           required
         />
         <Field
-          label="Price per bird (KES)"
+          label="Price per animal (KES)"
           type="number"
           inputMode="decimal"
           min={0}
@@ -659,8 +659,8 @@ function ReturnForm({
 
   return (
     <FormCard
-      title="Return unsold birds"
-      note="A return lifts the bird back off the allocation. It does not change the batch count, because the birds never left the flock."
+      title="Return unsold animals"
+      note="A return lifts the animal back off the allocation. It does not change the batch count, because the animals never left the batch."
       onCancel={onCancel}
     >
       <form
@@ -694,7 +694,7 @@ function ReturnForm({
           </select>
         </div>
         <Field
-          label="Birds returned"
+          label="Animals returned"
           type="number"
           inputMode="numeric"
           min={1}

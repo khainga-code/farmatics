@@ -86,4 +86,5 @@ the generated worker cannot silently drop out of the bundle.
 - The account limiter is per process, as above.
 - The SMS sender for Africa's Talking is written but has not run against a real
   account.
-- Goat and cattle management remain unbuilt. Reports were built in Phase 7.
+- Goat and cattle management was added in Phase 10. Reports were built in
+  Phase 7.

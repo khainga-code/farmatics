@@ -12,7 +12,7 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: 'home', end: true },
-  { to: '/poultry', label: 'Poultry', icon: 'poultry', end: false },
+  { to: '/poultry', label: 'Livestock', icon: 'poultry', end: false },
   {
     to: '/health',
     label: 'Health',

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { SPECIES_LABELS } from '@farmatics/shared';
 import { api } from '../api.js';
 import { useAuth } from '../auth.js';
 import { AppLayout } from '../components/AppLayout.js';
@@ -141,6 +142,7 @@ export function ReportsPage() {
   function downloadBatches() {
     const columns: Array<CsvColumn<BatchReportRow>> = [
       { header: 'Batch', value: (row) => row.code },
+      { header: 'Species', value: (row) => SPECIES_LABELS[row.species] },
       { header: 'House', value: (row) => row.houseName },
       { header: 'Arrived', value: (row) => row.arrivalDate },
       { header: 'Status', value: (row) => row.status },
@@ -150,7 +152,7 @@ export function ReportsPage() {
       { header: 'Sold', value: (row) => row.sold },
       { header: 'Unpriced sales', value: (row) => row.unpricedSales },
       { header: 'Feed kg', value: (row) => row.feedUsedKg },
-      { header: 'Feed per bird kg', value: (row) => row.feedPerBirdKg ?? '' },
+      { header: 'Feed per animal kg', value: (row) => row.feedPerBirdKg ?? '' },
       { header: 'Avg weight kg', value: (row) => row.avgWeightKg ?? '' },
     ];
     if (report.finance) {
@@ -169,12 +171,12 @@ export function ReportsPage() {
     const columns: Array<CsvColumn<SalespersonReportRow>> = [
       { header: 'Salesperson', value: (row) => row.name },
       { header: 'Handovers', value: (row) => row.handovers },
-      { header: 'Birds allocated', value: (row) => row.allocated },
+      { header: 'Animals allocated', value: (row) => row.allocated },
       { header: 'Sold', value: (row) => row.sold },
       { header: 'Returned', value: (row) => row.returned },
       { header: 'Still out', value: (row) => row.stillOut },
       { header: 'Feed kg', value: (row) => row.feedKg },
-      { header: 'Feed per bird kg', value: (row) => row.feedPerBirdSoldKg ?? '' },
+      { header: 'Feed per animal kg', value: (row) => row.feedPerBirdSoldKg ?? '' },
     ];
     if (report.finance) {
       columns.push({ header: 'Revenue KES', value: (row) => row.revenueKes ?? '' });
@@ -243,11 +245,11 @@ export function ReportsPage() {
             </div>
             <div className="card-body">
               <div className="status-grid">
-                <Stat label="Birds sold" value={formatCount(report.summary.birdsSold)} />
+                <Stat label="Animals sold" value={formatCount(report.summary.birdsSold)} />
                 <Stat
                   label="Deaths"
                   value={formatCount(report.summary.mortalityCount)}
-                  sub={`${formatPercent(report.summary.mortalityRatePct)} of birds at risk`}
+                  sub={`${formatPercent(report.summary.mortalityRatePct)} of animals at risk`}
                 />
                 <Stat label="Feed used" value={`${report.summary.feedUsedKg} kg`} />
                 {report.finance && (
@@ -295,7 +297,7 @@ export function ReportsPage() {
                         <th scope="col">Deaths</th>
                         <th scope="col">Sold</th>
                         <th scope="col">Feed</th>
-                        <th scope="col">kg/bird</th>
+                        <th scope="col">kg/animal</th>
                         <th scope="col">Avg wt</th>
                         {report.finance && (
                           <>
@@ -318,7 +320,9 @@ export function ReportsPage() {
                               {row.code}
                               {row.status !== 'active' && <Badge>Closed</Badge>}
                             </div>
-                            <div className="list-sub">Arrived {formatDate(row.arrivalDate)}</div>
+                            <div className="list-sub">
+                              {SPECIES_LABELS[row.species]} · Arrived {formatDate(row.arrivalDate)}
+                            </div>
                           </td>
                           <td>{row.houseName}</td>
                           <td className="num">{formatCount(row.live)}</td>
@@ -368,7 +372,7 @@ export function ReportsPage() {
                 </div>
               )}
               <p className="muted">
-                Live birds is where the flock stands now. Deaths, sales, feed and weight cover
+                Live animals is where the farm stands now. Deaths, sales, feed and weight cover
                 the chosen period. Margin subtracts approved expenses and feed cost from priced
                 sales.
               </p>
@@ -380,14 +384,14 @@ export function ReportsPage() {
               <h2 className="card-title">Mortality</h2>
               <div className="head-actions no-print">
                 <Badge tone={report.mortality.total > 0 ? 'red' : 'neutral'}>
-                  {formatCount(report.mortality.total)} birds
+                  {formatCount(report.mortality.total)} deaths
                 </Badge>
                 <Button
                   variant="ghost"
                   onClick={() =>
                     download('mortality-by-cause', [
                       { header: 'Cause', value: (row) => row.label },
-                      { header: 'Birds', value: (row) => row.birds },
+                      { header: 'Deaths', value: (row) => row.birds },
                     ], report.mortality.byCause)
                   }
                   disabled={report.mortality.byCause.length === 0}
@@ -519,12 +523,12 @@ export function ReportsPage() {
                       <tr>
                         <th scope="col">Salesperson</th>
                         <th scope="col">Handovers</th>
-                        <th scope="col">Birds out</th>
+                        <th scope="col">Animals out</th>
                         <th scope="col">Sold</th>
                         <th scope="col">Returned</th>
                         <th scope="col">Still out</th>
                         <th scope="col">Feed</th>
-                        <th scope="col">kg/bird</th>
+                        <th scope="col">kg/animal</th>
                         {report.finance && <th scope="col">Revenue</th>}
                       </tr>
                     </thead>
@@ -559,7 +563,7 @@ export function ReportsPage() {
                 </div>
               )}
               <p className="muted">
-                Handovers and sales cover the period. “Still out” is the birds each person may
+                Handovers and sales cover the period. “Still out” is the animals each person may
                 still sell now.
               </p>
             </div>

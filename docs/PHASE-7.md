@@ -52,9 +52,8 @@ use Monday-based weeks, with the first and last weeks clipped to the period.
 - Feed used is the feed issued to batches in the period, in kilograms,
   including feed sent out with a salesperson's allocation. Purchases into the
   store are not usage.
-- A batch's margin is revenue minus expenses tagged to that batch. Feed cost is
-  still not included, because feed is recorded in kilograms rather than
-  shillings.
+- A batch's margin is revenue minus expenses tagged to that batch and the cost
+  of feed issued to it. Feed cost was added to the margin in Phase 9.
 - Batch numbers are derived from the same events as the rest of the app:
   initial count, mortality, transfers, and sales. Allocations and returns move
   no birds out of a batch; only a sale does.
@@ -162,4 +161,5 @@ The screen was also exercised in a browser against a temporary stub API:
   just after local midnight can land in the previous UTC day.
 - There is no year-over-year comparison, custom date range or per-house filter.
 - Feed cost in margin and weight recording were built in Phase 9.
-- Goat and cattle management remain unbuilt.
+- Goat and cattle management was added in Phase 10: a batch now carries a
+  species and reuses the same event model.

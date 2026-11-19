@@ -15,6 +15,7 @@ import {
   toDateOnly,
   type CauseTotal,
   type ExpenseCategory,
+  type Species,
 } from '@farmatics/shared';
 import type {
   Batch,
@@ -102,6 +103,7 @@ export interface ReportSummary {
 export interface BatchReportRow {
   batchId: string;
   code: string;
+  species: Species;
   houseName: string;
   arrivalDate: string;
   status: string;
@@ -383,6 +385,7 @@ export function buildFarmReport(
       return {
         batchId: batch.id,
         code: batch.code,
+        species: batch.species,
         houseName: houseNames.get(batch.houseId) ?? 'House',
         arrivalDate: batch.arrivalDate,
         status: batch.status,

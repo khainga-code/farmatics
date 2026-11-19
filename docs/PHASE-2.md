@@ -108,10 +108,10 @@ WASM heap. `pnpm test` runs packages one at a time for the same reason.
 
 ## Still open
 
-- The four unconfirmed modules remain unbuilt: goat and cattle, vaccination and
-  mortality monitoring as a separate module, salesperson allocation, and finance.
-  Vaccination and mortality now exist inside poultry, but not as the standalone
-  monitoring module described in the brief.
-- Weight and growth recording, and feed conversion, are not built yet.
+- The four initially unconfirmed modules were built in later phases: finance
+  (3), salesperson allocation (4), health monitoring (5) and goats and cattle
+  (10). Goats and cattle reuse this event model.
+- Weight and growth recording were built in Phase 9; feed conversion is still
+  an estimate from the latest weighing.
 - Feed allocations per salesperson are not built; feed is issued to a batch.
 - Prices, buyers' balances and payments are finance, not this phase.

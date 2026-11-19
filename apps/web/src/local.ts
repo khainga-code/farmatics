@@ -4,11 +4,13 @@ import {
   allocationBalance,
   averageCostKesPerKg,
   batchCounts,
+  isSpecies,
   stockOnHand,
   type AllocationBalance,
   type ExpenseCategory,
   type ExpenseMethod,
   type MortalityCauseCategory,
+  type Species,
   type StockMovementKind,
 } from '@farmatics/shared';
 import { syncClient } from './offline.js';
@@ -108,6 +110,7 @@ export interface House {
 export interface Batch {
   id: string;
   houseId: string;
+  species: Species;
   code: string;
   breed: string | null;
   arrivalDate: string;
@@ -207,6 +210,7 @@ export function toBatches(records: LocalRecord[]): Batch[] {
   return records.map((record) => ({
     id: record.id,
     houseId: text(record.data['houseId']),
+    species: isSpecies(record.data['species']) ? record.data['species'] : 'poultry',
     code: text(record.data['code']),
     breed: maybeText(record.data['breed']),
     arrivalDate: text(record.data['arrivalDate']).slice(0, 10),

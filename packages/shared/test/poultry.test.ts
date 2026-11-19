@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  animalWord,
   batchCounts,
   batchDay,
+  batchInputSchema,
   canSellOn,
   daysBetween,
   feedPerKgSoldKg,
   latestWeight,
+  maxWeightKg,
   reminderIsDue,
   roundKg,
   saleOpensOn,
@@ -176,7 +179,48 @@ describe('growth', () => {
     ).toBe(false);
     expect(
       weightInputSchema.safeParse({ ...base, sampleCount: 20, averageWeightKg: 250 }).success,
+    ).toBe(true);
+    expect(
+      weightInputSchema.safeParse({ ...base, sampleCount: 20, averageWeightKg: 2500 }).success,
     ).toBe(false);
+  });
+});
+
+describe('species', () => {
+  it('keeps brooding for poultry and sells goats and cattle from arrival', () => {
+    expect(saleOpensOn('2026-05-01')).toBe('2026-05-22');
+    expect(saleOpensOn('2026-05-01', 'goat')).toBe('2026-05-01');
+    expect(saleOpensOn('2026-05-01', 'cattle')).toBe('2026-05-01');
+    expect(canSellOn('2026-05-01', '2026-05-10')).toBe(false);
+    expect(canSellOn('2026-05-01', '2026-05-10', 'goat')).toBe(true);
+  });
+
+  it('has a weight guard that fits each species', () => {
+    expect(maxWeightKg('poultry')).toBe(10);
+    expect(maxWeightKg('goat')).toBe(200);
+    expect(maxWeightKg('cattle')).toBe(2000);
+  });
+
+  it('names a count the way the farm would', () => {
+    expect(animalWord('poultry', 1)).toBe('bird');
+    expect(animalWord('poultry', 3)).toBe('birds');
+    expect(animalWord('goat', 1)).toBe('goat');
+    expect(animalWord('goat', 3)).toBe('goats');
+    expect(animalWord('cattle', 1)).toBe('head of cattle');
+    expect(animalWord('cattle', 3)).toBe('cattle');
+  });
+
+  it('defaults an old batch to poultry and accepts the other species', () => {
+    const base = {
+      houseId: '11111111-1111-4111-8111-111111111111',
+      code: 'B-1',
+      arrivalDate: '2026-05-01',
+      initialCount: 10,
+    };
+    const parsed = batchInputSchema.safeParse(base);
+    expect(parsed.success && parsed.data.species).toBe('poultry');
+    expect(batchInputSchema.safeParse({ ...base, species: 'goat' }).success).toBe(true);
+    expect(batchInputSchema.safeParse({ ...base, species: 'sheep' }).success).toBe(false);
   });
 });
 

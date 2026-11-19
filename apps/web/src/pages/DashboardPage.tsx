@@ -55,24 +55,26 @@ export function DashboardPage() {
   );
 
   const today = toDateOnly(new Date());
-  const liveBirds = batches.reduce(
+  const liveAnimals = batches.reduce(
     (total, batch) => total + balanceFor(batch, mortality, sales, transfers).live,
     0,
   );
   const feedOnHand = roundKg(
     stockItems.reduce((total, item) => total + onHandFor(item.id, movements), 0),
   );
-  const pendingVaccinations = batches.reduce((total, batch) => {
-    const done = new Set(
-      vaccinations.filter((event) => event.batchId === batch.id).map((event) => event.day),
-    );
-    return (
-      total +
-      vaccinationSchedule(batch.arrivalDate).filter(
-        (dose) => !done.has(dose.day) && reminderIsDue(dose, today),
-      ).length
-    );
-  }, 0);
+  const pendingVaccinations = batches
+    .filter((batch) => batch.species === 'poultry')
+    .reduce((total, batch) => {
+      const done = new Set(
+        vaccinations.filter((event) => event.batchId === batch.id).map((event) => event.day),
+      );
+      return (
+        total +
+        vaccinationSchedule(batch.arrivalDate).filter(
+          (dose) => !done.has(dose.day) && reminderIsDue(dose, today),
+        ).length
+      );
+    }, 0);
 
   // Money is derived the same way as bird counts: priced sales in, approved
   // expenses out. Nothing reads a stored balance.
@@ -93,7 +95,7 @@ export function DashboardPage() {
         <section className="card">
           <div className="card-head">
             <h2 className="card-title">Today on the farm</h2>
-            <Link to="/poultry">Open poultry</Link>
+            <Link to="/poultry">Open livestock</Link>
           </div>
           <div className="card-body">
             <div className="status-grid">
@@ -102,8 +104,8 @@ export function DashboardPage() {
                 <div className="status-value">{batches.length}</div>
               </div>
               <div>
-                <div className="status-label">Birds alive</div>
-                <div className="status-value">{liveBirds}</div>
+                <div className="status-label">Animals alive</div>
+                <div className="status-value">{liveAnimals}</div>
               </div>
               <div>
                 <div className="status-label">Feed on hand</div>
@@ -140,7 +142,7 @@ export function DashboardPage() {
             <div className="card-body">
               <div className="status-grid">
                 <div>
-                  <div className="status-label">Birds left to sell</div>
+                  <div className="status-label">Animals left to sell</div>
                   <div className="status-value">{allocationRemaining}</div>
                 </div>
                 <div>
@@ -155,7 +157,7 @@ export function DashboardPage() {
                 )}
               </div>
               <p className="muted">
-                Sales are recorded against these birds. Unsold birds can be returned to the farm.
+                Sales are recorded against these animals. Unsold animals can be returned to the farm.
               </p>
             </div>
           </section>

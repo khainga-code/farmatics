@@ -96,7 +96,7 @@ entity in `apps/api/src/sync/entities.ts` validates its own fields, declares the
 permissions that may write it and, where needed, the permissions that may pull
 it, and re-checks business rules inside the same
 tenant transaction - for example that a sale is on or after day 22, that a
-mortality record cannot take a batch below zero birds, or that an expense has
+mortality record cannot take a batch below zero animals, or that an expense has
 only one approval. An approval is its own append-only record rather than a flag
 on the expense, so the expense an offline phone pushed is never edited beneath
 it.
@@ -186,9 +186,9 @@ process memory. The deploy, backup and rollback steps are in
 | Database | `packages/db/test` | RLS across tenants, change sequence ordering, finance constraints, sale price checks, SQL splitting |
 | Offline engine | `packages/sync/test` | Atomic save, outbox ordering, push and pull, retry, permission-change reset, lock and unlock |
 | API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts, pull access by permission, per-account sign-in limits |
-| Poultry and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate, vaccinations, transfers, stock in kg, delivery prices, weighings, tenant boundaries |
+| Livestock and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate by species, vaccinations, transfers, stock in kg, delivery prices, weighings, tenant boundaries |
 | Finance | `apps/api/test/finance.test.ts` | Expense permissions, one decision per expense, priced and unpriced sales, tenant boundaries |
-| Allocation | `apps/api/test/allocations.test.ts` | Own-allocation sales, walk-in sales, over-allocation, returns, feed issued with the birds, cross-farm ids |
+| Allocation | `apps/api/test/allocations.test.ts` | Own-allocation sales, walk-in sales, over-allocation, returns, feed issued with the animals, cross-farm ids |
 | Pull access | `apps/api/test/pull-access.test.ts` | Which roles receive expenses, approvals and sale prices |
 | Throttle | `apps/api/test/throttle.test.ts` | Sliding window, no extension on rejection, reset, per-key independence |
 | Two phones | `apps/api/test/two-phone.test.ts` | Both phones offline, both write, both reconnect |

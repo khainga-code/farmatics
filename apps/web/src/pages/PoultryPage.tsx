@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  SPECIES,
+  SPECIES_LABELS,
+  animalWord,
   batchDay,
   batchInputSchema,
   canSellOn,
@@ -10,6 +13,7 @@ import {
   toDateOnly,
   vaccinationSchedule,
   vaccinationState,
+  type Species,
 } from '@farmatics/shared';
 import type { NewRecord } from '@farmatics/sync';
 import { useAuth } from '../auth.js';
@@ -39,11 +43,13 @@ export function PoultryPage() {
   const { data, loading } = useFarmData();
   const canSetup = can('manage_setup');
   const [showForm, setShowForm] = useState(false);
+  const [filter, setFilter] = useState<Species | 'all'>('all');
 
   const houses = toHouses(data.houses);
-  const batches = toBatches(data.batches).sort((left, right) =>
+  const allBatches = toBatches(data.batches).sort((left, right) =>
     right.arrivalDate.localeCompare(left.arrivalDate),
   );
+  const batches = allBatches.filter((batch) => filter === 'all' || batch.species === filter);
   const mortality = toMortality(data.mortality_events);
   const sales = toSales(data.bird_sales);
   const transfers = toTransfers(data.bird_transfers);
@@ -51,17 +57,19 @@ export function PoultryPage() {
 
   const today = toDateOnly(new Date());
 
-  const reminders = batches.flatMap((batch) =>
-    vaccinationSchedule(batch.arrivalDate)
-      .filter((dose) => !isDone(vaccinations, batch.id, dose.day))
-      .filter((dose) => reminderIsDue(dose, today))
-      .map((dose) => ({ batch, dose, state: vaccinationState(dose, today, false) })),
-  );
+  const reminders = allBatches
+    .filter((batch) => batch.species === 'poultry')
+    .flatMap((batch) =>
+      vaccinationSchedule(batch.arrivalDate)
+        .filter((dose) => !isDone(vaccinations, batch.id, dose.day))
+        .filter((dose) => reminderIsDue(dose, today))
+        .map((dose) => ({ batch, dose, state: vaccinationState(dose, today, false) })),
+    );
 
   return (
     <AppLayout
-      title="Poultry"
-      subtitle="Batches, mortality, transfers and vaccinations"
+      title="Livestock"
+      subtitle="Poultry, goats and cattle: batches, deaths, transfers and vaccinations"
       actions={
         canSetup && (
           <Button variant="ghost" onClick={() => setShowForm((open) => !open)}>
@@ -73,7 +81,7 @@ export function PoultryPage() {
       {showForm && canSetup && (
         <NewBatchCard
           houses={houses}
-          existingCodes={batches.map((batch) => batch.code)}
+          existingCodes={allBatches.map((batch) => batch.code)}
           online={online}
           onDone={() => setShowForm(false)}
         />
@@ -114,11 +122,31 @@ export function PoultryPage() {
           <Badge>{batches.length}</Badge>
         </div>
         <div className="card-body">
+          <div className="field">
+            <label className="field-label" htmlFor="species-filter">
+              Species
+            </label>
+            <select
+              id="species-filter"
+              className="input"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as Species | 'all')}
+            >
+              <option value="all">All animals</option>
+              {SPECIES.map((species) => (
+                <option key={species} value={species}>
+                  {SPECIES_LABELS[species]}
+                </option>
+              ))}
+            </select>
+          </div>
           {loading ? (
             <p className="muted">Loading this phone’s records…</p>
           ) : batches.length === 0 ? (
             <p className="muted">
-              No batches yet.{' '}
+              {allBatches.length === 0
+                ? 'No batches yet.'
+                : 'No batches of this species.'}{' '}
               {canSetup
                 ? 'Add the first house and batch to start counting from arrival day.'
                 : 'Your farm manager will set one up.'}
@@ -129,22 +157,24 @@ export function PoultryPage() {
                 const balance = balanceFor(batch, mortality, sales, transfers);
                 const house = houses.find((item) => item.id === batch.houseId);
                 const day = batchDay(batch.arrivalDate, today);
-                const sellable = canSellOn(batch.arrivalDate, today);
+                const sellable = canSellOn(batch.arrivalDate, today, batch.species);
                 return (
                   <li className="list-item" key={batch.id}>
                     <div>
                       <div className="list-title">
                         <Link to={`/poultry/${batch.id}`}>{batch.code}</Link>
+                        <Badge>{SPECIES_LABELS[batch.species]}</Badge>
                         {batch.dirty && <Badge tone="amber">Not sent</Badge>}
                         <Badge tone={sellable ? 'green' : 'neutral'}>
                           Day {Math.max(day, 1)}
                         </Badge>
                       </div>
                       <div className="list-sub">
-                        {house?.name ?? 'Unknown house'} · {balance.live} birds ·{' '}
+                        {house?.name ?? 'Unknown house'} · {balance.live}{' '}
+                        {animalWord(batch.species, balance.live)} ·{' '}
                         {sellable
                           ? 'ready to sell'
-                          : `selling opens ${formatDate(saleOpensOn(batch.arrivalDate))}`}
+                          : `selling opens ${formatDate(saleOpensOn(batch.arrivalDate, batch.species))}`}
                       </div>
                     </div>
                     <div className="list-actions">
@@ -183,6 +213,7 @@ function NewBatchCard({
   onDone: () => void;
 }) {
   const [form, setForm] = useState({
+    species: 'poultry' as Species,
     houseId: houses[0]?.id ?? '',
     newHouse: '',
     code: '',
@@ -225,6 +256,7 @@ function NewBatchCard({
 
       const parsed = batchInputSchema.safeParse({
         houseId,
+        species: form.species,
         code,
         breed: form.breed.trim() || undefined,
         arrivalDate: form.arrivalDate,
@@ -256,6 +288,28 @@ function NewBatchCard({
       <div className="card-body">
         {error && <Alert tone="error">{error}</Alert>}
         <form className="form form--inline" onSubmit={onSubmit} noValidate>
+          <div className="field">
+            <label className="field-label" htmlFor="batch-species">
+              Species
+            </label>
+            <select
+              id="batch-species"
+              className="input"
+              value={form.species}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  species: event.target.value as Species,
+                }))
+              }
+            >
+              {SPECIES.map((species) => (
+                <option key={species} value={species}>
+                  {SPECIES_LABELS[species]}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="field">
             <label className="field-label" htmlFor="batch-house">
               House
@@ -308,7 +362,7 @@ function NewBatchCard({
             required
           />
           <Field
-            label="Birds on arrival"
+            label="Animals on arrival"
             type="number"
             inputMode="numeric"
             min={1}
@@ -323,7 +377,9 @@ function NewBatchCard({
           </Button>
         </form>
         <p className="muted">
-          Vaccinations fall on day 12 and day 21. Reminders open three days before each.
+          {form.species === 'poultry'
+            ? 'Vaccinations fall on day 12 and day 21. Reminders open three days before each.'
+            : 'No brooding period: sales can be recorded from the arrival day.'}
         </p>
       </div>
     </section>

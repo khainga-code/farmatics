@@ -116,7 +116,8 @@ shape.
 
 - Credit sales, receivables, customer statements and part-payments are out of
   scope for this phase.
-- Feed cost per batch, and therefore a true batch margin, waits on costing.
+- Feed cost per batch, and therefore a true batch margin, was added in Phase 9,
+  including feed deliveries priced per kilogram.
 - Discounts, payroll, tax, bank reconciliation and other income are not built.
-- The other unconfirmed modules remain unbuilt: goat and cattle, standalone
-  vaccination and mortality monitoring, and salesperson allocation.
+- The other initially unconfirmed modules were built in later phases:
+  salesperson allocation (4), health monitoring (5) and goats and cattle (10).

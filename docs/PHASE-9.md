@@ -100,4 +100,6 @@ against a live Postgres here; CI applies it through the API suites.
 - Feed per kg sold is an estimate: sale weights are not recorded.
 - There is no feed stock valuation, no per-feed cost trend and no weighed
   sample history chart.
-- Goat and cattle management remain unbuilt.
+- Goat and cattle management was added in Phase 10: a batch now carries a
+  species and reuses the same event model. The feed and growth rules here apply
+  to all three species.

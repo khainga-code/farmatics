@@ -44,6 +44,7 @@ const batch = (over: Partial<Batch> = {}): Batch => ({
   breed: null,
   arrivalDate: '2026-04-01',
   initialCount: 100,
+  species: 'poultry',
   status: 'active',
   note: null,
   dirty: false,
@@ -513,5 +514,21 @@ describe('feed cost and weight', () => {
       marginKes: null,
       avgWeightKg: 2.4,
     });
+  });
+});
+
+describe('species', () => {
+  it('carries the batch species into the report rows', () => {
+    const report = buildFarmReport(
+      makeInput({
+        batches: [batch(), batch({ id: 'b2', code: 'B-2', species: 'goat' })],
+      }),
+      MAY,
+      { includeFinance: false },
+    );
+    expect(report.batches.map((row) => [row.code, row.species])).toEqual([
+      ['B-1', 'poultry'],
+      ['B-2', 'goat'],
+    ]);
   });
 });

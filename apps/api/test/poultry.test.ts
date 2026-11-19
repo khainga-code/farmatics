@@ -155,7 +155,12 @@ async function pull(bundle: TokenBundle): Promise<SyncChange[]> {
 /** A house and one batch, pushed by the owner (the only role with setup). */
 async function setupBatch(
   owner: TokenBundle,
-  options: { arrivalDaysAgo?: number; initialCount?: number; code?: string } = {},
+  options: {
+    arrivalDaysAgo?: number;
+    initialCount?: number;
+    code?: string;
+    species?: 'poultry' | 'goat' | 'cattle';
+  } = {},
 ) {
   const houseId = randomUUID();
   const batchId = randomUUID();
@@ -168,6 +173,7 @@ async function setupBatch(
       id: batchId,
       data: {
         houseId,
+        species: options.species,
         code: options.code ?? `B-${batchId.slice(0, 6)}`,
         breed: 'Ross 308',
         arrivalDate: dayOnly(arrival),
@@ -715,5 +721,102 @@ describe('feed cost and growth', () => {
       },
     ]);
     expect(response.results[0]).toMatchObject({ status: 'rejected', reason: 'unknown_batch' });
+  });
+});
+
+describe('goats and cattle', () => {
+  it('sells goats from arrival while poultry still waits for day 22', async () => {
+    const owner = await registerFarm();
+    const goats = await setupBatch(owner, {
+      species: 'goat',
+      arrivalDaysAgo: 2,
+      code: 'G-001',
+    });
+    const poultry = await setupBatch(owner, { arrivalDaysAgo: 2, code: 'B-001' });
+
+    const goatSale = await push(owner, [
+      {
+        table: 'bird_sales',
+        id: randomUUID(),
+        data: { batchId: goats.batchId, count: 1, recordedAt: new Date().toISOString() },
+      },
+    ]);
+    expect(goatSale.results[0]?.status).toBe('accepted');
+
+    const early = await push(owner, [
+      {
+        table: 'bird_sales',
+        id: randomUUID(),
+        data: { batchId: poultry.batchId, count: 1, recordedAt: new Date().toISOString() },
+      },
+    ]);
+    expect(early.results[0]).toMatchObject({
+      status: 'rejected',
+      reason: 'sale_too_early',
+    });
+  });
+
+  it('pulls the species and refuses a transfer across species', async () => {
+    const owner = await registerFarm();
+    const goats = await setupBatch(owner, { species: 'goat', code: 'G-002' });
+    const poultry = await setupBatch(owner, { code: 'B-002' });
+
+    const changes = await pull(owner);
+    expect(changes.find((change) => change.id === goats.batchId)?.data['species']).toBe('goat');
+    expect(changes.find((change) => change.id === poultry.batchId)?.data['species']).toBe(
+      'poultry',
+    );
+
+    const response = await push(owner, [
+      {
+        table: 'bird_transfers',
+        id: randomUUID(),
+        data: {
+          fromBatchId: goats.batchId,
+          toBatchId: poultry.batchId,
+          count: 1,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    expect(response.results[0]).toMatchObject({
+      status: 'rejected',
+      reason: 'species_mismatch',
+    });
+  });
+
+  it('weighs cattle in hundreds of kilograms and refuses that weight for poultry', async () => {
+    const owner = await registerFarm();
+    const cattle = await setupBatch(owner, { species: 'cattle', code: 'C-001' });
+    const poultry = await setupBatch(owner, { code: 'B-003' });
+
+    const heavy = await push(owner, [
+      {
+        table: 'batch_weights',
+        id: randomUUID(),
+        data: {
+          batchId: cattle.batchId,
+          sampleCount: 4,
+          averageWeightKg: 410,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+      {
+        table: 'batch_weights',
+        id: randomUUID(),
+        data: {
+          batchId: poultry.batchId,
+          sampleCount: 10,
+          averageWeightKg: 410,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+
+    expect(heavy.results[0]?.status).toBe('accepted');
+    expect(heavy.results[1]).toMatchObject({
+      status: 'rejected',
+      reason: 'invalid_weight',
+    });
   });
 });

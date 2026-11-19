@@ -1,13 +1,14 @@
 /**
- * Poultry and feed.
+ * Livestock and feed.
  *
  * The two rules this module exists to enforce:
- *   1. Counts are never typed in. A live bird count and the feed on hand are
+ *   1. Counts are never typed in. A live animal count and the feed on hand are
  *      derived from the events that changed them, so two phones cannot
  *      disagree about a balance.
- *   2. A batch has a lifecycle. Arrival sets the day count; birds may be sold
+ *   2. A batch has a lifecycle. Arrival sets the day count; poultry may be sold
  *      from day 22; the two vaccinations fall on day 12 and day 21, with a
- *      reminder three days before each.
+ *      reminder three days before each. Goats and cattle have no brooding
+ *      period and may be sold from arrival.
  *
  * Dates are business dates, not instants: a farm day is `YYYY-MM-DD`, and day
  * 1 is the arrival date. Keeping that arithmetic in shared means the phone and
@@ -46,6 +47,41 @@ export const MORTALITY_CAUSE_LABELS: Record<MortalityCauseCategory, string> = {
   unknown: 'Not sure',
 };
 
+// -------------------------------------------------------------- species ---
+
+/** What a batch holds. Poultry keeps the brooding and vaccination rules. */
+export const SPECIES = ['poultry', 'goat', 'cattle'] as const;
+
+export type Species = (typeof SPECIES)[number];
+
+export const SPECIES_LABELS: Record<Species, string> = {
+  poultry: 'Poultry',
+  goat: 'Goats',
+  cattle: 'Cattle',
+};
+
+/** How the farm would say a count: one bird, two goats, three cattle. */
+export function animalWord(species: Species, count: number): string {
+  if (species === 'poultry') return count === 1 ? 'bird' : 'birds';
+  if (species === 'goat') return count === 1 ? 'goat' : 'goats';
+  return count === 1 ? 'head of cattle' : 'cattle';
+}
+
+/** A weighing above this is a decimal point in the wrong place. */
+export const MAX_WEIGHT_KG: Record<Species, number> = {
+  poultry: 10,
+  goat: 200,
+  cattle: 2000,
+};
+
+export function maxWeightKg(species: Species): number {
+  return MAX_WEIGHT_KG[species];
+}
+
+export function isSpecies(value: unknown): value is Species {
+  return (SPECIES as readonly unknown[]).includes(value);
+}
+
 export function toDateOnly(value: string | Date): string {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = value instanceof Date ? value : new Date(value);
@@ -70,13 +106,20 @@ export function batchDay(arrivalDate: string, onDate: string | Date = new Date()
   return daysBetween(arrivalDate, toDateOnly(onDate)) + 1;
 }
 
-/** The first day birds may be sold, which is day 22. */
-export function saleOpensOn(arrivalDate: string): string {
-  return addDays(arrivalDate, SALE_START_DAY - 1);
+/**
+ * The first day animals may be sold. Poultry wait out brooding until day 22;
+ * goats and cattle may leave from arrival.
+ */
+export function saleOpensOn(arrivalDate: string, species: Species = 'poultry'): string {
+  return species === 'poultry' ? addDays(arrivalDate, SALE_START_DAY - 1) : toDateOnly(arrivalDate);
 }
 
-export function canSellOn(arrivalDate: string, onDate: string | Date = new Date()): boolean {
-  return toDateOnly(onDate) >= saleOpensOn(arrivalDate);
+export function canSellOn(
+  arrivalDate: string,
+  onDate: string | Date = new Date(),
+  species: Species = 'poultry',
+): boolean {
+  return toDateOnly(onDate) >= saleOpensOn(arrivalDate, species);
 }
 
 export interface VaccinationDose {
@@ -129,7 +172,7 @@ export interface BatchCounts {
   sold: number;
   transferredOut: number;
   transferredIn: number;
-  /** Birds believed alive now. Derived, never stored or edited. */
+  /** Animals believed alive now. Derived, never stored or edited. */
   live: number;
 }
 
@@ -202,7 +245,7 @@ export function latestWeight(samples: ReadonlyArray<WeightSample>): WeightReadin
     : null;
 }
 
-/** Average grams per bird added between the first and latest weighing. */
+/** Average kilograms per animal added between the first and latest weighing. */
 export function weightGainKg(samples: ReadonlyArray<WeightSample>): number | null {
   const usable = usableWeights(samples);
   const first = usable[0];
@@ -212,7 +255,7 @@ export function weightGainKg(samples: ReadonlyArray<WeightSample>): number | nul
 }
 
 /**
- * Feed per kilogram of bird sold. Every bird sold is valued at the latest
+ * Feed per kilogram of animal sold. Every animal sold is valued at the latest
  * average weight, because a sale records a price, not a weight. This is an
  * estimate and is labelled as one wherever it is shown.
  */
@@ -252,16 +295,18 @@ export const houseInputSchema = z.object({
 
 export const batchInputSchema = z.object({
   houseId: uuid,
+  /** Defaults to poultry so a batch queued before species existed still lands. */
+  species: z.enum(SPECIES).default('poultry'),
   code: trimmed(1, 40, 'Give the batch a code.'),
   breed: trimmed(0, 60, 'Keep the breed under 60 characters.').optional(),
   arrivalDate: dateOnlySchema,
-  initialCount: z.number().int().min(1, 'Enter at least one bird.').max(1_000_000),
+  initialCount: z.number().int().min(1, 'Enter at least one animal.').max(1_000_000),
   note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
 });
 
 export const mortalityInputSchema = z.object({
   batchId: uuid,
-  count: z.number().int().min(1, 'Enter at least one bird.').max(1_000_000),
+  count: z.number().int().min(1, 'Enter at least one animal.').max(1_000_000),
   cause: trimmed(0, 120, 'Keep the cause under 120 characters.').optional(),
   /** What kind of death it was. Older records have none. */
   causeCategory: z.enum(MORTALITY_CAUSE_CATEGORIES).optional(),
@@ -273,7 +318,7 @@ export const transferInputSchema = z
   .object({
     fromBatchId: uuid,
     toBatchId: uuid,
-    count: z.number().int().min(1, 'Enter at least one bird.').max(1_000_000),
+    count: z.number().int().min(1, 'Enter at least one animal.').max(1_000_000),
     recordedAt: isoTimestampSchema,
     clientTime: isoTimestampSchema.optional(),
     note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
@@ -285,10 +330,10 @@ export const transferInputSchema = z
 
 export const saleInputSchema = z.object({
   batchId: uuid,
-  count: z.number().int().min(1, 'Enter at least one bird.').max(1_000_000),
+  count: z.number().int().min(1, 'Enter at least one animal.').max(1_000_000),
   buyer: trimmed(0, 120, 'Keep the buyer name under 120 characters.').optional(),
   note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
-  /** Price per bird in KES. Older queued sales may omit it. */
+  /** Price per animal in KES. Older queued sales may omit it. */
   unitPriceKes: z.number().min(0).max(1_000_000).optional(),
   /** Required when a salesperson sells from their own allocation. */
   allocationId: uuid.optional(),
@@ -355,12 +400,12 @@ export const weightInputSchema = z.object({
   sampleCount: z
     .number()
     .int()
-    .min(1, 'Weigh at least one bird.')
-    .max(100_000, 'That is too many birds for one sample.'),
+    .min(1, 'Weigh at least one animal.')
+    .max(100_000, 'That is too many animals for one sample.'),
   averageWeightKg: z
     .number()
     .positive('Enter a weight.')
-    .max(100, 'That weight is too high for one bird.'),
+    .max(2000, 'That weight is too high for one animal.'),
   note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
   recordedAt: isoTimestampSchema,
   clientTime: isoTimestampSchema.optional(),

@@ -1,6 +1,6 @@
 # Farmatics
 
-Farm and poultry management for D Ayo Farm. Offline-first: staff record work
+Farm and livestock management for D Ayo Farm. Offline-first: staff record work
 on their phones whether or not there is signal, and the server reconciles when
 they reconnect.
 
@@ -9,13 +9,14 @@ they reconnect.
 **Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
 built. Phase 4 salesperson allocation built. Phase 5 health and phone-level
 privacy built. Phase 6 hardening built. Phase 7 reports and analytics built.
-Phase 8 production deployment prepared. Phase 9 feed cost and growth built.**
+Phase 8 production deployment prepared. Phase 9 feed cost and growth built.
+Phase 10 goats and cattle built.**
 Accounts, roles, devices, the
-sync engine and offline PIN unlock work end to end. Poultry batches, mortality,
-transfers, sales, vaccinations and the feed store now sit on that foundation,
-with a cash book for sales revenue, expenses and approvals, allocations
-that keep a salesperson selling only from the birds the farm gave them, a
-health screen that turns the flock's records into losses, survival and
+sync engine and offline PIN unlock work end to end. Poultry, goat and cattle
+batches, mortality, transfers, sales, vaccinations and the feed store now sit on
+that foundation, with a cash book for sales revenue, expenses and approvals,
+allocations that keep a salesperson selling only from the animals the farm gave
+them, a health screen that turns the farm's records into losses, survival and
 vaccination cover, sign-in limits that follow the account rather than the
 network it is tried from, and period reports that open offline and export to
 CSV.
@@ -31,10 +32,11 @@ CSV.
 | Offline PIN unlock and offline day limit | Working |
 | Installable PWA with a revisioned app-shell cache | Working |
 | Poultry batches, mortality, transfers, sales | Working, tested |
-| Vaccination schedule and reminders | Working |
+| Goat and cattle batches on the same event model | Working, tested |
+| Vaccination schedule and reminders | Working; poultry only |
 | Feed store in kilograms | Working, tested |
 | Cash book: priced sales, expenses, approvals | Working, tested |
-| Salesperson allocation and returns | Working, tested; birds and feed kg |
+| Salesperson allocation and returns | Working, tested; animals and feed kg |
 | Health monitoring, mortality causes and vaccination compliance | Working, tested in shared |
 | Cash book hidden from phones without finance permission | Working, API tests written |
 | Per-account limits on register, verify and sign-in | Working, tested |
@@ -55,23 +57,30 @@ keeps working for fourteen offline days; after that it asks for a fresh sign-in.
 Writes recorded offline stay queued and are sent when the API is reachable
 again.
 
-## Poultry and feed
+## Livestock and feed
 
-Arrival is day 1. Brooding runs to day 21 and birds may be sold from day 22.
-Vaccinations fall on day 12 and day 21, with a reminder three days before each
-(day 9 and day 18). Feed is recorded in kilograms.
+A batch says what it holds: poultry, goats or cattle. Poultry keeps the
+original rules. Arrival is day 1, brooding runs to day 21 and birds may be sold
+from day 22, with vaccinations on day 12 and day 21 and a reminder three days
+before each (day 9 and day 18). Goats and cattle have no brooding period, no
+vaccination schedule, and may be sold from the day they arrive. Feed is
+recorded in kilograms for every species.
 
-Counts are never typed into a balance. Birds alive and feed on hand are derived
-from the events that changed them - mortality, transfers, sales, receipts and
-issues - so two phones cannot disagree about a balance. A sale is judged by the
-day it happened, not by the day the phone reconnects.
+Counts are never typed into a balance. Animals alive and feed on hand are
+derived from the events that changed them - mortality, transfers, sales,
+receipts and issues - so two phones cannot disagree about a balance. A sale is
+judged by the day it happened, not by the day the phone reconnects. A transfer
+may only move animals into a batch of the same species.
 
-A weight check records how many birds were weighed and the average they came
+A weight check records how many animals were weighed and the average they came
 to. The latest average, growth between weighings and feed per kilogram sold are
-derived from those checks and the feed issues, never typed in as a total.
+derived from those checks and the feed issues, never typed in as a total. A
+weighing is limited to 10 kg for poultry, 200 kg for goats and 2000 kg for
+cattle.
 
-The full rule set is in [`docs/PHASE-2.md`](./docs/PHASE-2.md) and
-[`docs/PHASE-9.md`](./docs/PHASE-9.md).
+The full rule set is in [`docs/PHASE-2.md`](./docs/PHASE-2.md),
+[`docs/PHASE-9.md`](./docs/PHASE-9.md) and
+[`docs/PHASE-10.md`](./docs/PHASE-10.md).
 
 ## Finance
 
@@ -93,13 +102,13 @@ The full rule set is in [`docs/PHASE-3.md`](./docs/PHASE-3.md) and
 
 ## Sales allocation
 
-The owner or farm manager hands birds from a batch to a salesperson. She sells
-only from that allocation, and unsold birds can be returned. Allocating does
-not change the batch's live count: the birds stay in the flock until a sale
+The owner or farm manager hands animals from a batch to a salesperson. She sells
+only from that allocation, and unsold animals can be returned. Allocating does
+not change the batch's live count: the animals stay in the batch until a sale
 records that they left. The balance is derived from the events
 (`allocated - sold - returned`), so two phones cannot disagree.
 
-Feed can go out with the birds. It is recorded as an ordinary store issue in
+Feed can go out with the animals. It is recorded as an ordinary store issue in
 kilograms, tagged with the allocation, so feed on hand is still derived from the
 store. The allocation and its feed are queued together in one write.
 
@@ -112,11 +121,11 @@ The full rule set is in [`docs/PHASE-4.md`](./docs/PHASE-4.md).
 ## Health monitoring
 
 The Health screen reads the events already on the phone and shows, per active
-batch, how many birds were lost, how many in the first week and in the last
-seven days, the mortality and survival rates, whether each vaccination was on
-time or late, and what is killing birds by category. A batch is flagged when
-first-week losses reach 2% or cumulative losses reach 5% of the birds that
-arrived.
+batch, how many animals were lost, how many in the first week and in the last
+seven days, the mortality and survival rates, and what is killing them by
+category. Poultry batches also show whether each vaccination was on time or
+late. A batch is flagged when first-week losses reach 2% or cumulative losses
+reach 5% of the animals that arrived.
 
 Deaths can be tagged as disease, heat, cold, predator, injury, culling or
 unknown. Older deaths with no category are shown as uncategorised, never
@@ -125,16 +134,16 @@ guessed.
 ## Reports and analytics
 
 The Reports screen answers period questions from the records already on the
-phone. It offers this month, the last 7, 30 or 90 days, and shows birds sold,
-deaths and mortality rate, feed used, batch performance, deaths by cause and
-batch, money in and out by day or week, spend by category, and each
+phone. It offers this month, the last 7, 30 or 90 days, and shows animals sold,
+deaths and mortality rate, feed used, batch performance by species, deaths by
+cause and batch, money in and out by day or week, spend by category, and each
 salesperson's handovers, sales still out and feed.
 
 Revenue counts priced sales only, and an unpriced sale is reported rather than
 counted as zero. Spend counts approved expenses only, with pending ones named
 separately. Batch margin also subtracts feed cost, valued from delivery prices,
-and the batch row carries the latest average weight. Live birds is where the
-flock stands now; every other figure is scoped to the chosen period. Nothing
+and the batch row carries the latest average weight. Live animals is where the
+farm stands now; every other figure is scoped to the chosen period. Nothing
 extra is stored or fetched, so the report works offline and is as fresh as the
 last sync.
 
@@ -153,7 +162,7 @@ so the cash book does not sit on a stock keeper's device at all. When a
 person's rights change, the phone pushes any queued work, rebuilds its local
 copy and pulls again.
 
-Sales are still pulled by everyone because bird counts drive every batch
+Sales are still pulled by everyone because animal counts drive every batch
 balance; the sale price travels with them. The Reports route additionally
 requires `view_reports`, and the money inside a report is only calculated for a
 member who may see the cash book.
@@ -202,14 +211,16 @@ Seeded accounts:
 | Stock keeper | username `joseph` | temporary PIN printed by `pnpm seed` |
 | Salesperson | username `mercy` | temporary PIN printed by `pnpm seed` |
 
-The seed also creates a demo house, a batch that arrived twenty days ago, and
-750 kg of feed, so the poultry and store screens have real data on first
-sign-in. The second vaccination is due on that batch, and its reminder is open.
-The delivery is priced and the batch has two weighings, so feed cost, average
-weight and growth show real figures. Two demo expenses are created too: one
-approved for chicks and one transport cost still waiting for a decision. The
-salesperson has an 80-bird allocation from the demo batch, with 60 kg of feed
-sent along, so the Sales screen has real data.
+The seed also creates a demo house, a poultry batch that arrived twenty days
+ago, and 750 kg of feed, so the livestock and store screens have real data on
+first sign-in. The second vaccination is due on that batch, and its reminder is
+open. The delivery is priced and the batch has two weighings, so feed cost,
+average weight and growth show real figures. A goat herd and a cattle herd each
+carry feed, a death and two weighings, and the cattle herd has one priced sale.
+Two demo expenses are created too: one approved for chicks and one transport
+cost still waiting for a decision. The salesperson has an 80-animal allocation
+from the demo batch, with 60 kg of feed sent along, so the Sales screen has real
+data.
 
 In development the six-digit sign-up code is returned by the API and shown on
 the verify screen, so no SMS provider is needed.
@@ -237,7 +248,7 @@ apps/
   api/        Fastify API, auth, validation, sync push and pull; Dockerfile for production
   web/        React + TypeScript app, installable as a PWA
 packages/
-  shared/     Zod schemas, DTOs, permissions, sync wire contract, poultry and finance rules
+  shared/     Zod schemas, DTOs, permissions, sync wire contract, livestock and finance rules
   db/         Schema, migrations, database drivers, tenant helpers
   sync/       Dexie stores, outbox, sync client, offline session and PIN verifier
 docs/
@@ -245,11 +256,13 @@ docs/
   PHASE-1.md        Foundation: what is built, what is stubbed
   PHASE-2.md        Poultry and feed: rules, entities, screens, rejections
   PHASE-3.md        Finance: cash book, approvals, batch margin
-  PHASE-4.md        Salesperson allocation: birds, feed, sales, returns
+  PHASE-4.md        Salesperson allocation: animals, feed, sales, returns
   PHASE-5.md        Health monitoring and phone-level privacy
   PHASE-6.md        Hardening: per-account limits and a revisioned shell
   PHASE-7.md        Reports: periods, CSV exports, print and privacy
   PHASE-8.md        Going live: roles, environment, deploy, backups, rollback
+  PHASE-9.md        Feed cost and growth: delivery prices, weighings, margin
+  PHASE-10.md       Goats and cattle: species, sale gates and weighing limits
 ```
 
 ## Configuration

@@ -6,9 +6,11 @@ import {
   expenseApprovalInputSchema,
   expenseInputSchema,
   houseInputSchema,
+  maxWeightKg,
   mortalityInputSchema,
   saleInputSchema,
   saleOpensOn,
+  SPECIES_LABELS,
   stockItemInputSchema,
   stockMovementInputSchema,
   toDateOnly,
@@ -25,6 +27,7 @@ import {
   type Permission,
   type Role,
   type SaleInput,
+  type Species,
   type StockItemInput,
   type StockMovementInput,
   type SyncChange,
@@ -198,9 +201,19 @@ async function requireBatch(
   farmId: string,
   batchId: unknown,
   label = 'batch',
-): Promise<{ id: string; arrival_date: string; initial_count: number }> {
-  const row = await tx.one<{ id: string; arrival_date: unknown; initial_count: number }>(
-    'select id, arrival_date, initial_count from batches where id = $1 and farm_id = $2',
+): Promise<{
+  id: string;
+  arrival_date: string;
+  initial_count: number;
+  species: Species;
+}> {
+  const row = await tx.one<{
+    id: string;
+    arrival_date: unknown;
+    initial_count: number;
+    species: Species;
+  }>(
+    'select id, arrival_date, initial_count, species from batches where id = $1 and farm_id = $2',
     [batchId, farmId],
   );
   if (!row) {
@@ -209,7 +222,12 @@ async function requireBatch(
       `That ${label} is not on this farm. Refresh and choose it again.`,
     );
   }
-  return { id: row.id, arrival_date: asDateOnly(row.arrival_date)!, initial_count: row.initial_count };
+  return {
+    id: row.id,
+    arrival_date: asDateOnly(row.arrival_date)!,
+    initial_count: row.initial_count,
+    species: row.species,
+  };
 }
 
 /**
@@ -365,6 +383,7 @@ const batchEntity: SyncEntity = {
         id,
         farm_id: ctx.farmId,
         house_id: input.houseId,
+        species: input.species,
         code: input.code,
         breed: input.breed ?? null,
         arrival_date: input.arrivalDate,
@@ -391,6 +410,7 @@ const batchEntity: SyncEntity = {
       deletedAt: asIso(row['deleted_at']),
       data: {
         houseId: row['house_id'],
+        species: row['species'],
         code: row['code'],
         breed: row['breed'],
         arrivalDate: asDateOnly(row['arrival_date']),
@@ -452,8 +472,14 @@ const transferEntity: SyncEntity = {
 
   async insert(tx, ctx, id, data) {
     const input = data as TransferInput;
-    await requireBatch(tx, ctx.farmId, input.fromBatchId, 'batch');
-    await requireBatch(tx, ctx.farmId, input.toBatchId, 'receiving batch');
+    const from = await requireBatch(tx, ctx.farmId, input.fromBatchId, 'batch');
+    const to = await requireBatch(tx, ctx.farmId, input.toBatchId, 'receiving batch');
+    if (from.species !== to.species) {
+      throw new SyncValidationError(
+        'species_mismatch',
+        'Move animals only into a batch of the same species.',
+      );
+    }
 
     const row = await insertOne(tx, 'bird_transfers', {
       id,
@@ -498,14 +524,17 @@ const saleEntity: SyncEntity = {
     const input = data as SaleInput;
     const batch = await requireBatch(tx, ctx.farmId, input.batchId);
 
-    // Day 22 is the first selling day. Compare the day the sale happened, not
-    // the day the phone happened to reconnect.
+    // Poultry wait out brooding until day 22. Goats and cattle may leave from
+    // arrival. Compare the day the sale happened, not the day the phone
+    // happened to reconnect.
     const saleDate = toDateOnly(input.recordedAt);
-    const opensOn = saleOpensOn(batch.arrival_date);
+    const opensOn = saleOpensOn(batch.arrival_date, batch.species);
     if (saleDate < opensOn) {
       throw new SyncValidationError(
         'sale_too_early',
-        `Birds from this batch can be sold from ${opensOn} (day 22).`,
+        batch.species === 'poultry'
+          ? `Birds from this batch can be sold from ${opensOn} (day 22).`
+          : `Animals from this batch can be sold from its arrival day, ${opensOn}.`,
       );
     }
 
@@ -732,7 +761,16 @@ const weightEntity: SyncEntity = {
 
   async insert(tx, ctx, id, data) {
     const input = data as WeightInput;
-    await requireBatch(tx, ctx.farmId, input.batchId);
+    const batch = await requireBatch(tx, ctx.farmId, input.batchId);
+
+    // Broilers, goats and cattle sit an order of magnitude apart. The shared
+    // schema guards the absolute limit; this guard knows the species.
+    if (input.averageWeightKg > maxWeightKg(batch.species)) {
+      throw new SyncValidationError(
+        'invalid_weight',
+        `That is too heavy for ${SPECIES_LABELS[batch.species].toLowerCase()}. Check the weight and the units.`,
+      );
+    }
 
     const row = await insertOne(tx, 'batch_weights', {
       id,

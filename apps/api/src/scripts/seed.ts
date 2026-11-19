@@ -132,6 +132,78 @@ try {
         [randomUUID(), farmId, batchId, ownerId, randomUUID()],
       );
 
+      // Goats and cattle: one batch each so the livestock screens have more
+      // than poultry to show, including a cattle sale with no allocation.
+      const goatHouseId = randomUUID();
+      const cattleHouseId = randomUUID();
+      const goatBatchId = randomUUID();
+      const cattleBatchId = randomUUID();
+      const roughageId = randomUUID();
+
+      await tx.query(
+        `insert into houses (id, farm_id, name, note)
+         values ($1, $2, 'Goat pen', 'Demo goat housing'), ($3, $2, 'Cattle boma', 'Demo cattle housing')`,
+        [goatHouseId, farmId, cattleHouseId],
+      );
+      await tx.query(
+        `insert into batches
+           (id, farm_id, house_id, code, breed, arrival_date, initial_count, species, note)
+         values
+           ($1, $3, $4, 'G-2026-01', 'Galla', current_date - 90, 40, 'goat', 'Demo goat herd'),
+           ($2, $3, $5, 'C-2026-01', 'Friesian', current_date - 120, 12, 'cattle', 'Demo cattle herd')`,
+        [goatBatchId, cattleBatchId, farmId, goatHouseId, cattleHouseId],
+      );
+      await tx.query(
+        `insert into stock_items (id, farm_id, name, category, unit, reorder_level_kg)
+         values ($1, $2, $3, 'feed', 'kg', $4)`,
+        [roughageId, farmId, 'Dairy meal', 200],
+      );
+      await tx.query(
+        `insert into stock_movements
+           (id, farm_id, stock_item_id, kind, quantity_kg, batch_id, unit_cost_kes_per_kg, note, recorded_at, recorded_by)
+         values
+           ($1, $2, $3, 'receipt', 2000, null, 38, 'Dairy meal delivery',
+            now() - interval '20 days', $6),
+           ($4, $2, $3, 'issue', 250, $7, null, 'Goat herd feed',
+            now() - interval '5 days', $6),
+           ($5, $2, $3, 'issue', 800, $8, null, 'Cattle herd feed',
+            now() - interval '5 days', $6)`,
+        [randomUUID(), farmId, roughageId, randomUUID(), randomUUID(), ownerId, goatBatchId, cattleBatchId],
+      );
+      await tx.query(
+        `insert into mortality_events
+           (id, farm_id, batch_id, count, cause, cause_category, recorded_at, recorded_by)
+         values
+           ($1, $2, $3, 1, 'Pneumonia', 'disease', now() - interval '10 days', $5),
+           ($4, $2, $6, 1, 'Bloat', 'disease', now() - interval '7 days', $5)`,
+        [randomUUID(), farmId, goatBatchId, randomUUID(), ownerId, cattleBatchId],
+      );
+      await tx.query(
+        `insert into batch_weights
+           (id, farm_id, batch_id, sample_count, average_weight_kg, note, recorded_at, recorded_by)
+         values
+           ($1, $2, $3, 10, 28.5, 'Goat herd sample', now() - interval '30 days', $7),
+           ($4, $2, $3, 10, 34.2, 'Goat herd sample', now(), $7),
+           ($5, $2, $6, 12, 320, 'Cattle herd sample', now() - interval '40 days', $7),
+           ($8, $2, $6, 12, 385, 'Cattle herd sample', now(), $7)`,
+        [
+          randomUUID(),
+          farmId,
+          goatBatchId,
+          randomUUID(),
+          randomUUID(),
+          cattleBatchId,
+          ownerId,
+          randomUUID(),
+        ],
+      );
+      await tx.query(
+        `insert into bird_sales
+           (id, farm_id, batch_id, count, buyer, note, unit_price_kes, recorded_at, recorded_by)
+         values ($1, $2, $3, 2, 'Nakuru market', 'Two steers', 85000, now() - interval '5 days', $4)`,
+        [randomUUID(), farmId, cattleBatchId, ownerId],
+      );
+
       // Birds handed to the demo salesperson, so the Sales screen has data.
       const allocationId = randomUUID();
       await tx.query(

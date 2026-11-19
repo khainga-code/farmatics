@@ -54,13 +54,16 @@ export function HealthPage() {
           mortality: events,
           today,
         }),
-        compliance: vaccinationCompliance(
-          batch.arrivalDate,
-          vaccinations
-            .filter((event) => event.batchId === batch.id)
-            .map((event) => ({ day: event.day, recordedAt: event.recordedAt })),
-          today,
-        ),
+        compliance:
+          batch.species === 'poultry'
+            ? vaccinationCompliance(
+                batch.arrivalDate,
+                vaccinations
+                  .filter((event) => event.batchId === batch.id)
+                  .map((event) => ({ day: event.day, recordedAt: event.recordedAt })),
+                today,
+              )
+            : null,
         causes: groupMortalityByCause(events),
       };
     })
@@ -75,7 +78,7 @@ export function HealthPage() {
   return (
     <AppLayout
       title="Health"
-      subtitle="Losses, survival and vaccination cover, worked out from the flock's records"
+      subtitle="Losses, survival and vaccination cover, worked out from the farm's records"
     >
       {loading && <p className="muted">Loading this phone’s records…</p>}
 
@@ -130,7 +133,7 @@ export function HealthPage() {
               <p className="list-sub">Arrived {formatDate(card.batch.arrivalDate)}</p>
             </div>
             <Badge tone={card.health.alert === 'alert' ? 'red' : 'green'}>
-              {card.health.alert === 'alert' ? 'Check the flock' : 'On track'}
+              {card.health.alert === 'alert' ? 'Check the batch' : 'On track'}
             </Badge>
           </div>
           <div className="card-body">
@@ -158,26 +161,28 @@ export function HealthPage() {
               </div>
             </div>
 
-            <div>
-              <div className="status-label">Vaccinations</div>
-              <ul className="list">
-                {card.compliance.doses.map((status) => (
-                  <li className="list-item" key={status.dose.day}>
-                    <div>
-                      <div className="list-title">{status.dose.label}</div>
-                      <div className="list-sub">
-                        Due {formatDate(status.dose.dueOn)}
-                        {status.doneOn ? ` · recorded ${formatDate(status.doneOn)}` : ''}
+            {card.compliance && (
+              <div>
+                <div className="status-label">Vaccinations</div>
+                <ul className="list">
+                  {card.compliance.doses.map((status) => (
+                    <li className="list-item" key={status.dose.day}>
+                      <div>
+                        <div className="list-title">{status.dose.label}</div>
+                        <div className="list-sub">
+                          Due {formatDate(status.dose.dueOn)}
+                          {status.doneOn ? ` · recorded ${formatDate(status.doneOn)}` : ''}
+                        </div>
                       </div>
-                    </div>
-                    <Badge tone={DOSE_TONES[status.state]}>{DOSE_LABELS[status.state]}</Badge>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                      <Badge tone={DOSE_TONES[status.state]}>{DOSE_LABELS[status.state]}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div>
-              <div className="status-label">What is killing birds</div>
+              <div className="status-label">What is killing animals</div>
               {card.causes.length === 0 ? (
                 <p className="muted">No deaths recorded.</p>
               ) : (

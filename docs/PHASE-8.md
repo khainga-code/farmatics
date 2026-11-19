@@ -216,4 +216,5 @@ launch.
 - There is no shared limiter store, so the API runs as one instance.
 - No automated backup, uptime alert or log drain is configured.
 - Feed cost in batch margin and weight recording were built in Phase 9.
-- Goat and cattle management remain unbuilt.
+- Goat and cattle management was added in Phase 10: a batch now carries a
+  species and reuses the same event model.

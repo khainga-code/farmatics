@@ -96,9 +96,10 @@ sync, API and web tests one package at a time.
 
 ## Still open
 
-- Goat and cattle management, reports and the goat/cattle health schedule are
-  unbuilt; this health module covers the broiler schedule.
-- Sale prices are visible to every role because bird counts are. A stricter
+- Goat and cattle management was added in Phase 10, and reports in Phase 7, but
+  goats and cattle still have no health schedule; this module covers the
+  broiler schedule.
+- Sale prices are visible to every role because animal counts are. A stricter
   split (price on a finance-only table) is not built.
 - Per-account throttling and service-worker cache busting are built in Phase 6.
 - Commission, salesperson targets, credit sales and receivables are out of
