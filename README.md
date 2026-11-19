@@ -9,7 +9,7 @@ they reconnect.
 **Phase 1 foundation complete. Phase 2 poultry and feed built. Phase 3 finance
 built. Phase 4 salesperson allocation built. Phase 5 health and phone-level
 privacy built. Phase 6 hardening built. Phase 7 reports and analytics built.
-Phase 8 production deployment prepared.**
+Phase 8 production deployment prepared. Phase 9 feed cost and growth built.**
 Accounts, roles, devices, the
 sync engine and offline PIN unlock work end to end. Poultry batches, mortality,
 transfers, sales, vaccinations and the feed store now sit on that foundation,
@@ -39,6 +39,8 @@ CSV.
 | Cash book hidden from phones without finance permission | Working, API tests written |
 | Per-account limits on register, verify and sign-in | Working, tested |
 | Period reports, CSV exports and print layout | Working, tested |
+| Feed delivery prices and feed cost in batch margin | Working, tested |
+| Weight checks, growth and feed per kg sold | Working, tested |
 | Production API image, config guards and runbook | Prepared; hosting not wired |
 
 ## Offline behaviour
@@ -64,7 +66,12 @@ from the events that changed them - mortality, transfers, sales, receipts and
 issues - so two phones cannot disagree about a balance. A sale is judged by the
 day it happened, not by the day the phone reconnects.
 
-The full rule set is in [`docs/PHASE-2.md`](./docs/PHASE-2.md).
+A weight check records how many birds were weighed and the average they came
+to. The latest average, growth between weighings and feed per kilogram sold are
+derived from those checks and the feed issues, never typed in as a total.
+
+The full rule set is in [`docs/PHASE-2.md`](./docs/PHASE-2.md) and
+[`docs/PHASE-9.md`](./docs/PHASE-9.md).
 
 ## Finance
 
@@ -74,10 +81,15 @@ Revenue, spend and a batch's margin are derived from those events; no table
 stores a running balance.
 
 An unpriced sale is reported as unpriced rather than counted as zero, and only
-approved expenses reduce a batch's margin. Feed cost is not included in batch
-margin yet, because feed is recorded in kilograms rather than shillings.
+approved expenses reduce a batch's margin. A feed delivery can carry its price
+per kilogram; feed issued to a batch is valued at that feed's average delivery
+price, so margin is revenue less approved direct costs and feed cost. Feed with
+no delivery price is reported in kilograms as uncosted rather than valued at
+zero. Buy feed through the store; entering the same purchase as a feed expense
+would count it twice.
 
-The full rule set is in [`docs/PHASE-3.md`](./docs/PHASE-3.md).
+The full rule set is in [`docs/PHASE-3.md`](./docs/PHASE-3.md) and
+[`docs/PHASE-9.md`](./docs/PHASE-9.md).
 
 ## Sales allocation
 
@@ -120,9 +132,11 @@ salesperson's handovers, sales still out and feed.
 
 Revenue counts priced sales only, and an unpriced sale is reported rather than
 counted as zero. Spend counts approved expenses only, with pending ones named
-separately. Live birds is where the flock stands now; every other figure is
-scoped to the chosen period. Nothing extra is stored or fetched, so the report
-works offline and is as fresh as the last sync.
+separately. Batch margin also subtracts feed cost, valued from delivery prices,
+and the batch row carries the latest average weight. Live birds is where the
+flock stands now; every other figure is scoped to the chosen period. Nothing
+extra is stored or fetched, so the report works offline and is as fresh as the
+last sync.
 
 Each section exports to CSV in the browser, with spreadsheet-formula prefixes
 neutralised, and the whole report has a print layout. A member with
@@ -191,10 +205,11 @@ Seeded accounts:
 The seed also creates a demo house, a batch that arrived twenty days ago, and
 750 kg of feed, so the poultry and store screens have real data on first
 sign-in. The second vaccination is due on that batch, and its reminder is open.
-Two demo expenses are created too: one approved for chicks and one transport
-cost still waiting for a decision. The salesperson has an 80-bird allocation
-from the demo batch, with 60 kg of feed sent along, so the Sales screen has real
-data.
+The delivery is priced and the batch has two weighings, so feed cost, average
+weight and growth show real figures. Two demo expenses are created too: one
+approved for chicks and one transport cost still waiting for a decision. The
+salesperson has an 80-bird allocation from the demo batch, with 60 kg of feed
+sent along, so the Sales screen has real data.
 
 In development the six-digit sign-up code is returned by the API and shown on
 the verify screen, so no SMS provider is needed.

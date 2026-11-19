@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod';
-import { isoTimestampSchema } from './poultry.js';
+import { isoTimestampSchema, roundKg, type StockMovementKind } from './poultry.js';
 
 export const EXPENSE_CATEGORIES = [
   'feed',
@@ -119,11 +119,81 @@ export function expenseState(
   return approvalFor(expenseId, approvals)?.decision ?? 'pending';
 }
 
+// ------------------------------------------------------------- feed cost ---
+
+export interface CostedMovement {
+  stockItemId: string;
+  kind: StockMovementKind;
+  quantityKg: number;
+  /** Set on a delivery when the farm knows what it paid per kilogram. */
+  unitCostKesPerKg?: number | null | undefined;
+}
+
+export interface FeedCost {
+  /** Issued kilograms valued at each feed's average delivered price. */
+  costKes: number;
+  /** Issued kilograms whose feed has never had a priced delivery. */
+  uncostedKg: number;
+}
+
+/**
+ * The average price paid per kilogram for one feed, from its priced deliveries.
+ * It is a simple weighted average of every delivery on record, not a per-day
+ * valuation: two phones that saw the same deliveries get the same number, and a
+ * late-arriving receipt moves the average rather than rewriting stored costs.
+ */
+export function averageCostKesPerKg(
+  receipts: ReadonlyArray<Pick<CostedMovement, 'quantityKg' | 'unitCostKesPerKg'>>,
+): number | null {
+  let kg = 0;
+  let cost = 0;
+  for (const receipt of receipts) {
+    const unit = receipt.unitCostKesPerKg;
+    if (unit === null || unit === undefined) continue;
+    if (!Number.isFinite(unit) || unit < 0 || receipt.quantityKg <= 0) continue;
+    kg += receipt.quantityKg;
+    cost += receipt.quantityKg * unit;
+  }
+  return kg > 0 ? cost / kg : null;
+}
+
+/**
+ * Values feed issues from the priced deliveries of the same feed. Feed with no
+ * priced delivery is counted in kilograms, not silently valued at zero.
+ */
+export function feedCostKes(
+  issues: ReadonlyArray<CostedMovement>,
+  receipts: ReadonlyArray<CostedMovement>,
+): FeedCost {
+  const deliveries = new Map<string, CostedMovement[]>();
+  for (const receipt of receipts) {
+    if (receipt.kind !== 'receipt') continue;
+    const list = deliveries.get(receipt.stockItemId);
+    if (list) list.push(receipt);
+    else deliveries.set(receipt.stockItemId, [receipt]);
+  }
+
+  let cost = 0;
+  let uncostedKg = 0;
+  for (const issue of issues) {
+    if (issue.kind !== 'issue' || issue.quantityKg <= 0) continue;
+    const average = averageCostKesPerKg(deliveries.get(issue.stockItemId) ?? []);
+    if (average === null) uncostedKg += issue.quantityKg;
+    else cost += issue.quantityKg * average;
+  }
+
+  return { costKes: roundKes(cost), uncostedKg: roundKg(uncostedKg) };
+}
+
 export interface BatchFinance {
   /** Revenue from priced sales only. */
   revenueKes: number;
   /** Approved expenses tagged to this batch. */
   expensesKes: number;
+  /** Feed issued to this batch, valued from priced deliveries. */
+  feedCostKes: number;
+  /** Issued feed with no delivery price; its cost is not in the margin. */
+  uncostedFeedKg: number;
   marginKes: number;
   /** Sales with no price, so the owner knows revenue is incomplete. */
   unpricedSales: number;
@@ -134,6 +204,7 @@ export function batchFinance(
   sales: ReadonlyArray<PricedSale & { batchId: string }>,
   expenses: ReadonlyArray<ExpenseLike>,
   approvals: ReadonlyArray<ExpenseApprovalLike>,
+  feedCost: FeedCost = { costKes: 0, uncostedKg: 0 },
 ): BatchFinance {
   const batchSales = sales.filter((sale) => sale.batchId === batchId);
   const priced = batchSales
@@ -144,10 +215,13 @@ export function batchFinance(
   );
   const revenueKes = sumKes(priced);
   const expensesKes = totalExpensesKes(approved);
+  const feedCostKes = roundKes(feedCost.costKes);
   return {
     revenueKes,
     expensesKes,
-    marginKes: roundKes(revenueKes - expensesKes),
+    feedCostKes,
+    uncostedFeedKg: roundKg(feedCost.uncostedKg),
+    marginKes: roundKes(revenueKes - expensesKes - feedCostKes),
     unpricedSales: batchSales.length - priced.length,
   };
 }

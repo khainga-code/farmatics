@@ -14,6 +14,7 @@ import {
   toDateOnly,
   transferInputSchema,
   vaccinationInputSchema,
+  weightInputSchema,
   type AllocationInput,
   type BatchInput,
   type BirdReturnInput,
@@ -29,6 +30,7 @@ import {
   type SyncChange,
   type TransferInput,
   type VaccinationInput,
+  type WeightInput,
 } from '@farmatics/shared';
 import { z } from 'zod';
 
@@ -691,6 +693,7 @@ const stockMovementEntity: SyncEntity = {
       stock_item_id: input.stockItemId,
       kind: input.kind,
       quantity_kg: input.quantityKg,
+      unit_cost_kes_per_kg: input.unitCostKesPerKg ?? null,
       batch_id: input.batchId ?? null,
       allocation_id: input.allocationId ?? null,
       note: input.note ?? null,
@@ -709,8 +712,50 @@ const stockMovementEntity: SyncEntity = {
         stockItemId: row['stock_item_id'],
         kind: row['kind'],
         quantityKg: num(row['quantity_kg']),
+        unitCostKesPerKg:
+          row['unit_cost_kes_per_kg'] === null ? null : num(row['unit_cost_kes_per_kg']),
         batchId: row['batch_id'],
         allocationId: row['allocation_id'],
+        note: row['note'],
+        recordedAt: asIso(row['recorded_at']),
+        recordedBy: row['recorded_by'],
+        clientTime: asIso(row['client_time']),
+      },
+    };
+  },
+};
+
+const weightEntity: SyncEntity = {
+  table: 'batch_weights',
+  schema: weightInputSchema,
+  permissionsFor: () => ['record_growth'],
+
+  async insert(tx, ctx, id, data) {
+    const input = data as WeightInput;
+    await requireBatch(tx, ctx.farmId, input.batchId);
+
+    const row = await insertOne(tx, 'batch_weights', {
+      id,
+      farm_id: ctx.farmId,
+      batch_id: input.batchId,
+      sample_count: input.sampleCount,
+      average_weight_kg: input.averageWeightKg,
+      note: input.note ?? null,
+      ...eventColumns(ctx, input),
+    });
+    return row ? { changeSeq: String(row.change_seq) } : null;
+  },
+
+  toChange(row) {
+    return {
+      table: 'batch_weights',
+      id: String(row['id']),
+      changeSeq: String(row['change_seq']),
+      deletedAt: asIso(row['deleted_at']),
+      data: {
+        batchId: row['batch_id'],
+        sampleCount: num(row['sample_count']),
+        averageWeightKg: num(row['average_weight_kg']),
         note: row['note'],
         recordedAt: asIso(row['recorded_at']),
         recordedBy: row['recorded_by'],
@@ -956,6 +1001,7 @@ const ENTITIES: SyncEntity[] = [
   vaccinationEntity,
   stockItemEntity,
   stockMovementEntity,
+  weightEntity,
   expenseEntity,
   expenseApprovalEntity,
 ];
@@ -980,6 +1026,7 @@ export const entitySchemas = {
   vaccination_events: vaccinationInputSchema,
   stock_items: stockItemInputSchema,
   stock_movements: stockMovementInputSchema,
+  batch_weights: weightInputSchema,
   expenses: expenseInputSchema,
   expense_approvals: expenseApprovalInputSchema,
 } as const;

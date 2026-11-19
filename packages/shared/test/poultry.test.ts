@@ -5,12 +5,17 @@ import {
   batchDay,
   canSellOn,
   daysBetween,
+  feedPerKgSoldKg,
+  latestWeight,
   reminderIsDue,
   roundKg,
   saleOpensOn,
+  stockMovementInputSchema,
   stockOnHand,
   vaccinationSchedule,
   vaccinationState,
+  weightGainKg,
+  weightInputSchema,
   type VaccinationDose,
 } from '../src/poultry.js';
 
@@ -114,5 +119,96 @@ describe('derived balances', () => {
   it('rounds weights to the nearest 10 g', () => {
     expect(roundKg(0.1 + 0.2)).toBe(0.3);
     expect(roundKg(12.3456)).toBe(12.35);
+  });
+});
+
+describe('growth', () => {
+  const sample = (recordedAt: string, averageWeightKg: number, sampleCount = 20) => ({
+    recordedAt,
+    averageWeightKg,
+    sampleCount,
+  });
+
+  it('uses the latest weighing regardless of the order it was saved in', () => {
+    const readings = [
+      sample('2026-05-10T08:00:00.000Z', 1.85),
+      sample('2026-05-03T08:00:00.000Z', 1.2),
+      sample('2026-05-17T08:00:00.000Z', 2.4),
+    ];
+    expect(latestWeight(readings)).toEqual({
+      recordedAt: '2026-05-17T08:00:00.000Z',
+      averageWeightKg: 2.4,
+      sampleCount: 20,
+    });
+    expect(latestWeight([])).toBeNull();
+  });
+
+  it('measures gain between the first and latest weighing only', () => {
+    expect(weightGainKg([sample('2026-05-03T08:00:00.000Z', 1.2)])).toBeNull();
+    expect(
+      weightGainKg([
+        sample('2026-05-10T08:00:00.000Z', 1.85),
+        sample('2026-05-03T08:00:00.000Z', 1.2),
+      ]),
+    ).toBe(0.65);
+  });
+
+  it('estimates feed per kilogram sold from the latest average weight', () => {
+    expect(feedPerKgSoldKg(300, 120, 2.5)).toBe(1);
+    expect(feedPerKgSoldKg(300, 0, 2.5)).toBeNull();
+    expect(feedPerKgSoldKg(300, 120, null)).toBeNull();
+    expect(feedPerKgSoldKg(0, 120, 2.5)).toBeNull();
+  });
+
+  it('accepts a weighing only with a positive sample and weight', () => {
+    const base = {
+      batchId: '11111111-1111-4111-8111-111111111111',
+      recordedAt: '2026-05-03T08:00:00.000Z',
+    };
+    expect(
+      weightInputSchema.safeParse({ ...base, sampleCount: 20, averageWeightKg: 1.85 }).success,
+    ).toBe(true);
+    expect(
+      weightInputSchema.safeParse({ ...base, sampleCount: 0, averageWeightKg: 1.85 }).success,
+    ).toBe(false);
+    expect(
+      weightInputSchema.safeParse({ ...base, sampleCount: 20, averageWeightKg: 0 }).success,
+    ).toBe(false);
+    expect(
+      weightInputSchema.safeParse({ ...base, sampleCount: 20, averageWeightKg: 250 }).success,
+    ).toBe(false);
+  });
+});
+
+describe('feed delivery price', () => {
+  const base = {
+    stockItemId: '11111111-1111-4111-8111-111111111111',
+    quantityKg: 500,
+    recordedAt: '2026-05-03T08:00:00.000Z',
+  };
+
+  it('lets a delivery carry a price per kilogram', () => {
+    const parsed = stockMovementInputSchema.safeParse({
+      ...base,
+      kind: 'receipt',
+      unitCostKesPerKg: 68.5,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('refuses a price on anything but a delivery', () => {
+    const issue = stockMovementInputSchema.safeParse({
+      ...base,
+      kind: 'issue',
+      batchId: '22222222-2222-4222-8222-222222222222',
+      unitCostKesPerKg: 68.5,
+    });
+    expect(issue.success).toBe(false);
+  });
+
+  it('still accepts a delivery without a price', () => {
+    expect(
+      stockMovementInputSchema.safeParse({ ...base, kind: 'receipt' }).success,
+    ).toBe(true);
   });
 });

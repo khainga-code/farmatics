@@ -165,6 +165,69 @@ export function roundKg(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+// ----------------------------------------------------------------- growth ---
+
+export interface WeightSample {
+  recordedAt: string;
+  averageWeightKg: number;
+  sampleCount: number;
+}
+
+export interface WeightReading {
+  recordedAt: string;
+  averageWeightKg: number;
+  sampleCount: number;
+}
+
+function usableWeights(samples: ReadonlyArray<WeightSample>): WeightSample[] {
+  return samples
+    .filter(
+      (sample) =>
+        Number.isFinite(sample.averageWeightKg) && sample.averageWeightKg > 0,
+    )
+    .slice()
+    .sort((left, right) => left.recordedAt.localeCompare(right.recordedAt));
+}
+
+/** The most recent weighing, or null before the first one. */
+export function latestWeight(samples: ReadonlyArray<WeightSample>): WeightReading | null {
+  const usable = usableWeights(samples);
+  const last = usable[usable.length - 1];
+  return last
+    ? {
+        recordedAt: last.recordedAt,
+        averageWeightKg: last.averageWeightKg,
+        sampleCount: last.sampleCount,
+      }
+    : null;
+}
+
+/** Average grams per bird added between the first and latest weighing. */
+export function weightGainKg(samples: ReadonlyArray<WeightSample>): number | null {
+  const usable = usableWeights(samples);
+  const first = usable[0];
+  const last = usable[usable.length - 1];
+  if (!first || !last || usable.length < 2) return null;
+  return roundKg(last.averageWeightKg - first.averageWeightKg);
+}
+
+/**
+ * Feed per kilogram of bird sold. Every bird sold is valued at the latest
+ * average weight, because a sale records a price, not a weight. This is an
+ * estimate and is labelled as one wherever it is shown.
+ */
+export function feedPerKgSoldKg(
+  feedUsedKg: number,
+  birdsSold: number,
+  averageWeightKg: number | null | undefined,
+): number | null {
+  if (birdsSold <= 0 || feedUsedKg <= 0) return null;
+  if (averageWeightKg === null || averageWeightKg === undefined || averageWeightKg <= 0) {
+    return null;
+  }
+  return roundKg(feedUsedKg / (birdsSold * averageWeightKg));
+}
+
 // ---------------------------------------------------------------- schemas ---
 
 const uuid = z.string().uuid('That is not a valid id.');
@@ -261,6 +324,8 @@ export const stockMovementInputSchema = z
     batchId: uuid.optional(),
     /** Set when the feed was handed to a salesperson with their birds. */
     allocationId: uuid.optional(),
+    /** What the delivery cost per kilogram. Receipts only. */
+    unitCostKesPerKg: z.number().min(0).max(1_000_000).optional(),
     note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
     recordedAt: isoTimestampSchema,
     clientTime: isoTimestampSchema.optional(),
@@ -276,7 +341,30 @@ export const stockMovementInputSchema = z
   .refine((value) => value.allocationId === undefined || value.kind === 'issue', {
     message: 'Only feed issued from the store can name an allocation.',
     path: ['allocationId'],
-  });
+  })
+  .refine(
+    (value) => value.unitCostKesPerKg === undefined || value.kind === 'receipt',
+    {
+      message: 'Only a delivery can carry a price.',
+      path: ['unitCostKesPerKg'],
+    },
+  );
+
+export const weightInputSchema = z.object({
+  batchId: uuid,
+  sampleCount: z
+    .number()
+    .int()
+    .min(1, 'Weigh at least one bird.')
+    .max(100_000, 'That is too many birds for one sample.'),
+  averageWeightKg: z
+    .number()
+    .positive('Enter a weight.')
+    .max(100, 'That weight is too high for one bird.'),
+  note: trimmed(0, 200, 'Keep the note under 200 characters.').optional(),
+  recordedAt: isoTimestampSchema,
+  clientTime: isoTimestampSchema.optional(),
+});
 
 export type HouseInput = z.infer<typeof houseInputSchema>;
 export type BatchInput = z.infer<typeof batchInputSchema>;
@@ -286,3 +374,4 @@ export type SaleInput = z.infer<typeof saleInputSchema>;
 export type VaccinationInput = z.infer<typeof vaccinationInputSchema>;
 export type StockItemInput = z.infer<typeof stockItemInputSchema>;
 export type StockMovementInput = z.infer<typeof stockMovementInputSchema>;
+export type WeightInput = z.infer<typeof weightInputSchema>;

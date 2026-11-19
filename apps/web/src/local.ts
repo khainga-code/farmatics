@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { LocalRecord } from '@farmatics/sync';
 import {
   allocationBalance,
+  averageCostKesPerKg,
   batchCounts,
   stockOnHand,
   type AllocationBalance,
@@ -32,6 +33,7 @@ const TABLES = [
   'vaccination_events',
   'stock_items',
   'stock_movements',
+  'batch_weights',
   'expenses',
   'expense_approvals',
 ] as const;
@@ -52,6 +54,7 @@ function emptyFarmData(): FarmData {
     vaccination_events: [],
     stock_items: [],
     stock_movements: [],
+    batch_weights: [],
     expenses: [],
     expense_approvals: [],
   };
@@ -179,6 +182,15 @@ export interface StockMovement extends EventBase {
   batchId: string | null;
   /** Set when the feed went out with a salesperson's allocation. */
   allocationId: string | null;
+  /** What a delivery cost per kilogram; null on issues and old receipts. */
+  unitCostKesPerKg: number | null;
+  note: string | null;
+}
+
+export interface BatchWeight extends EventBase {
+  batchId: string;
+  sampleCount: number;
+  averageWeightKg: number;
   note: string | null;
 }
 
@@ -302,6 +314,22 @@ export function toStockMovements(records: LocalRecord[]): StockMovement[] {
     quantityKg: count(record.data['quantityKg']),
     batchId: maybeText(record.data['batchId']),
     allocationId: maybeText(record.data['allocationId']),
+    unitCostKesPerKg:
+      record.data['unitCostKesPerKg'] === null || record.data['unitCostKesPerKg'] === undefined
+        ? null
+        : count(record.data['unitCostKesPerKg']),
+    note: maybeText(record.data['note']),
+    recordedAt: text(record.data['recordedAt']),
+    dirty: record.dirty,
+  }));
+}
+
+export function toWeights(records: LocalRecord[]): BatchWeight[] {
+  return records.map((record) => ({
+    id: record.id,
+    batchId: text(record.data['batchId']),
+    sampleCount: count(record.data['sampleCount']),
+    averageWeightKg: count(record.data['averageWeightKg']),
     note: maybeText(record.data['note']),
     recordedAt: text(record.data['recordedAt']),
     dirty: record.dirty,
@@ -418,5 +446,14 @@ export function onHandFor(itemId: string, movements: StockMovement[]): number {
     movements
       .filter((movement) => movement.stockItemId === itemId)
       .map((movement) => ({ kind: movement.kind, quantityKg: movement.quantityKg })),
+  );
+}
+
+/** What one feed has cost per kilogram, averaged over priced deliveries. */
+export function averageCostFor(itemId: string, movements: StockMovement[]): number | null {
+  return averageCostKesPerKg(
+    movements.filter(
+      (movement) => movement.kind === 'receipt' && movement.stockItemId === itemId,
+    ),
   );
 }

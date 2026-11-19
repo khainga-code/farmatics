@@ -7,6 +7,7 @@ import { useAuth } from '../auth.js';
 import { AppLayout } from '../components/AppLayout.js';
 import { Alert, Badge, Button, Field } from '../components/ui.js';
 import {
+  averageCostFor,
   onHandFor,
   toBatches,
   toStockItems,
@@ -102,6 +103,7 @@ export function StorePage() {
             <ul className="list">
               {items.map((item) => {
                 const onHand = onHandFor(item.id, movements);
+                const cost = averageCostFor(item.id, movements);
                 const low = item.reorderLevelKg !== null && onHand <= item.reorderLevelKg;
                 return (
                   <li className="list-item" key={item.id}>
@@ -113,9 +115,15 @@ export function StorePage() {
                         {low && onHand >= 0 && <Badge tone="amber">Reorder</Badge>}
                       </div>
                       <div className="list-sub">
-                        {item.reorderLevelKg !== null
-                          ? `Reorder at ${item.reorderLevelKg} kg`
-                          : 'No reorder level set'}
+                        {cost === null
+                          ? item.reorderLevelKg !== null
+                            ? `Reorder at ${item.reorderLevelKg} kg · no delivery price yet`
+                            : 'No reorder level or delivery price set'
+                          : `Avg cost KES ${cost.toFixed(2)}/kg${
+                              item.reorderLevelKg !== null
+                                ? ` · reorder at ${item.reorderLevelKg} kg`
+                                : ''
+                            }`}
                       </div>
                     </div>
                     <div className="status-value">{onHand} kg</div>
@@ -149,12 +157,14 @@ export function StorePage() {
           title="Receive feed"
           items={items}
           busy={busy}
+          allowCost
           onCancel={() => setAction(null)}
-          onSave={async (stockItemId, quantityKg, note) => {
+          onSave={async (stockItemId, quantityKg, note, _batchId, unitCostKesPerKg) => {
             const parsed = stockMovementInputSchema.safeParse({
               stockItemId,
               kind: 'receipt',
               quantityKg,
+              unitCostKesPerKg,
               note: note || undefined,
               recordedAt: new Date().toISOString(),
             });
@@ -303,6 +313,7 @@ function MovementForm({
   items,
   batches = [],
   allowNegative = false,
+  allowCost = false,
   onSave,
   onCancel,
   busy,
@@ -311,11 +322,13 @@ function MovementForm({
   items: StockItem[];
   batches?: ReturnType<typeof toBatches>;
   allowNegative?: boolean;
+  allowCost?: boolean;
   onSave: (
     stockItemId: string,
     quantityKg: number,
     note: string,
     batchId?: string,
+    unitCostKesPerKg?: number,
   ) => void;
   onCancel: () => void;
   busy: boolean;
@@ -324,6 +337,7 @@ function MovementForm({
   const [quantity, setQuantity] = useState('');
   const [note, setNote] = useState('');
   const [batchId, setBatchId] = useState(batches[0]?.id ?? '');
+  const [cost, setCost] = useState('');
 
   return (
     <FormCard title={title} onCancel={onCancel}>
@@ -331,7 +345,13 @@ function MovementForm({
         className="form form--inline"
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
-          onSave(stockItemId, Number(quantity), note.trim(), batchId || undefined);
+          onSave(
+            stockItemId,
+            Number(quantity),
+            note.trim(),
+            batchId || undefined,
+            allowCost && cost.trim() ? Number(cost) : undefined,
+          );
         }}
         noValidate
       >
@@ -382,6 +402,18 @@ function MovementForm({
           hint={allowNegative ? 'Use a negative number to write stock off.' : undefined}
           required
         />
+        {allowCost && (
+          <Field
+            label="Price per kg (KES)"
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min={0}
+            value={cost}
+            onChange={(event) => setCost(event.target.value)}
+            hint="Costs feed issued to batches. Do not also record it as a feed expense."
+          />
+        )}
         <Field label="Note" value={note} onChange={(event) => setNote(event.target.value)} />
         <Button type="submit" loading={busy} disabled={!stockItemId}>
           Save

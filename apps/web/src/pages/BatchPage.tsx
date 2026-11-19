@@ -6,6 +6,9 @@ import {
   batchDay,
   batchFinance,
   canSellOn,
+  feedCostKes,
+  feedPerKgSoldKg,
+  latestWeight,
   mortalityInputSchema,
   reminderIsDue,
   saleInputSchema,
@@ -16,6 +19,7 @@ import {
   vaccinationInputSchema,
   vaccinationSchedule,
   vaccinationState,
+  weightInputSchema,
   type MortalityCauseCategory,
 } from '@farmatics/shared';
 import { useAuth } from '../auth.js';
@@ -38,6 +42,7 @@ import {
   toStockMovements,
   toTransfers,
   toVaccinations,
+  toWeights,
   useFarmData,
 } from '../local.js';
 import { saveAndConfirm } from '../save.js';
@@ -45,7 +50,7 @@ import { notify } from '../toast.js';
 import { formatKes } from './FinancePage.js';
 import { formatDate } from './PoultryPage.js';
 
-type Action = 'mortality' | 'transfer' | 'sale' | 'vaccination' | 'feed' | null;
+type Action = 'mortality' | 'transfer' | 'sale' | 'vaccination' | 'feed' | 'weight' | null;
 
 interface HistoryRow {
   id: string;
@@ -86,18 +91,28 @@ export function BatchPage() {
   const vaccinations = toVaccinations(data.vaccination_events);
   const stockItems = toStockItems(data.stock_items);
   const movements = toStockMovements(data.stock_movements);
+  const weights = toWeights(data.batch_weights).filter((sample) => sample.batchId === batch.id);
 
   const balance = balanceFor(batch, mortality, sales, transfers);
+  const feed = feedCostKes(
+    movements.filter((movement) => movement.kind === 'issue' && movement.batchId === batch.id),
+    movements,
+  );
   const finance = batchFinance(
     batch.id,
     sales,
     toExpenses(data.expenses),
     toExpenseApprovals(data.expense_approvals),
+    feed,
   );
   const today = toDateOnly(new Date());
   const day = Math.max(batchDay(batch.arrivalDate, today), 1);
   const sellable = canSellOn(batch.arrivalDate, today);
   const feedUsed = feedUsedBy(batch.id, movements);
+  const latest = latestWeight(weights);
+  const feedPerKgSold = latest
+    ? feedPerKgSoldKg(feedUsed, balance.sold, latest.averageWeightKg)
+    : null;
 
   // A salesperson sells from their own allocation; the owner and manager may
   // record a walk-in sale without one.
@@ -179,6 +194,15 @@ export function BatchPage() {
           stockItems.find((item) => item.id === movement.stockItemId)?.name ?? 'Feed',
         tone: 'neutral' as const,
       })),
+    ...weights.map((sample) => ({
+      id: sample.id,
+      at: sample.recordedAt,
+      title: `Weight check: ${sample.averageWeightKg} kg average`,
+      detail: `${sample.sampleCount} bird${sample.sampleCount === 1 ? '' : 's'} weighed${
+        sample.note ? ` · ${sample.note}` : ''
+      }`,
+      tone: 'neutral' as const,
+    })),
   ].sort((left, right) => right.at.localeCompare(left.at));
 
   async function save(
@@ -239,7 +263,23 @@ export function BatchPage() {
             <Stat label="Sold" value={balance.sold} />
             <Stat label="Transferred" value={balance.transferredOut} />
             <Stat label="Feed used" value={`${feedUsed} kg`} />
+            <Stat
+              label="Avg weight"
+              value={latest ? `${latest.averageWeightKg} kg` : '—'}
+            />
+            <Stat
+              label="Feed per kg sold"
+              value={feedPerKgSold === null ? '—' : `${feedPerKgSold} kg`}
+            />
           </div>
+          {latest && (
+            <p className="muted">
+              Average weight from {latest.sampleCount} bird
+              {latest.sampleCount === 1 ? '' : 's'} weighed{' '}
+              {formatDate(latest.recordedAt.slice(0, 10))}. Feed per kg sold values every bird
+              sold at that latest average.
+            </p>
+          )}
           {sellable ? (
             <Alert tone="success">
               Brooding finished. Birds from this batch may be sold from{' '}
@@ -271,6 +311,10 @@ export function BatchPage() {
                 <div className="status-value">{formatKes(finance.expensesKes)}</div>
               </div>
               <div>
+                <div className="status-label">Feed cost</div>
+                <div className="status-value">{formatKes(finance.feedCostKes)}</div>
+              </div>
+              <div>
                 <div className="status-label">Margin</div>
                 <div className="status-value money--strong">
                   {formatKes(finance.marginKes)}
@@ -284,9 +328,17 @@ export function BatchPage() {
                 {finance.unpricedSales === 1 ? 'is' : 'are'} not counted in revenue.
               </Alert>
             )}
+            {finance.uncostedFeedKg > 0 && (
+              <Alert tone="warning">
+                {finance.uncostedFeedKg} kg of the feed issued to this batch has no delivery
+                price, so that cost is missing from the margin. Add the price when receiving
+                feed in the store.
+              </Alert>
+            )}
             <p className="muted">
-              Direct costs are approved expenses tagged to this batch. Feed cost is not included
-              yet.
+              Direct costs are approved expenses tagged to this batch. Feed cost values issued
+              feed at its average delivery price; record a feed purchase as a priced delivery,
+              not also as a feed expense, or it will count twice.
             </p>
           </div>
         </section>
@@ -360,6 +412,11 @@ export function BatchPage() {
             {(can('reserve_feed') || can('record_feeding')) && stockItems.length > 0 && (
               <Button variant="ghost" onClick={() => start('feed')}>
                 Issue feed
+              </Button>
+            )}
+            {can('record_growth') && (
+              <Button variant="ghost" onClick={() => start('weight')}>
+                Record weight
               </Button>
             )}
           </div>
@@ -466,6 +523,27 @@ export function BatchPage() {
                 setBusy(true);
                 try {
                   await save('stock_movements', parsed.data, 'Feed issued');
+                } catch {
+                  fail('Could not save on this phone. Try again.');
+                }
+              }}
+            />
+          )}
+          {action === 'weight' && (
+            <WeightForm
+              last={latest}
+              onCancel={() => setAction(null)}
+              busy={busy}
+              onSave={async (payload) => {
+                const parsed = weightInputSchema.safeParse({
+                  batchId: batch.id,
+                  ...payload,
+                  recordedAt: new Date().toISOString(),
+                });
+                if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Check the entry.');
+                setBusy(true);
+                try {
+                  await save('batch_weights', parsed.data, 'Weight recorded');
                 } catch {
                   fail('Could not save on this phone. Try again.');
                 }
@@ -825,6 +903,69 @@ function VaccinationForm({
             ))}
           </select>
         </div>
+        <Button type="submit" loading={busy}>
+          Save
+        </Button>
+      </form>
+    </FormShell>
+  );
+}
+
+function WeightForm({
+  last,
+  onSave,
+  onCancel,
+  busy,
+}: {
+  last: ReturnType<typeof latestWeight>;
+  onSave: (payload: { sampleCount: number; averageWeightKg: number; note?: string }) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [sampleCount, setSampleCount] = useState('');
+  const [averageWeight, setAverageWeight] = useState('');
+  const [note, setNote] = useState('');
+
+  return (
+    <FormShell title="Record weight" onCancel={onCancel}>
+      <form
+        className="form form--inline"
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault();
+          onSave({
+            sampleCount: Number(sampleCount),
+            averageWeightKg: Number(averageWeight),
+            note: note.trim() || undefined,
+          });
+        }}
+        noValidate
+      >
+        <Field
+          label="Birds weighed"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          value={sampleCount}
+          onChange={(event) => setSampleCount(event.target.value)}
+          hint="The sample the average comes from."
+          required
+        />
+        <Field
+          label="Average weight (kg)"
+          type="number"
+          inputMode="decimal"
+          min={0.01}
+          step="0.01"
+          value={averageWeight}
+          onChange={(event) => setAverageWeight(event.target.value)}
+          hint={
+            last
+              ? `Last reading ${last.averageWeightKg} kg on ${formatDate(last.recordedAt.slice(0, 10))}`
+              : undefined
+          }
+          required
+        />
+        <Field label="Note" value={note} onChange={(event) => setNote(event.target.value)} />
         <Button type="submit" loading={busy}>
           Save
         </Button>

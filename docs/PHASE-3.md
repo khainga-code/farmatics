@@ -66,6 +66,9 @@ costing decision the client has not made yet. Laying the two numbers side by
 side would produce a margin that looks better than it is, so the batch screen
 says so in words.
 
+Phase 9 closes this: a delivery can carry a price per kilogram, and a batch's
+margin subtracts the cost of the feed issued to it.
+
 ## Screens
 
 | Screen | What it does |

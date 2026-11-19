@@ -215,5 +215,5 @@ launch.
 - The Africa's Talking sender is still untested against a live account.
 - There is no shared limiter store, so the API runs as one instance.
 - No automated backup, uptime alert or log drain is configured.
-- Feed cost is still missing from batch margin, and goat and cattle management
-  remain unbuilt.
+- Feed cost in batch margin and weight recording were built in Phase 9.
+- Goat and cattle management remain unbuilt.

@@ -161,5 +161,5 @@ The screen was also exercised in a browser against a temporary stub API:
 - Days are grouped in UTC, not the farm's local timezone. An event recorded
   just after local midnight can land in the previous UTC day.
 - There is no year-over-year comparison, custom date range or per-house filter.
-- Feed cost is still missing from margin because stock is held in kilograms.
+- Feed cost in margin and weight recording were built in Phase 9.
 - Goat and cattle management remain unbuilt.

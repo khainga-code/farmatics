@@ -345,6 +345,12 @@ function ExpenseForm({
               ))}
             </select>
           </div>
+          {form.category === 'feed' && (
+            <p className="muted">
+              Feed received into the store is costed from its delivery price. Adding a feed
+              purchase here as well counts it twice in batch margin.
+            </p>
+          )}
           <Field
             label="Amount (KES)"
             type="number"

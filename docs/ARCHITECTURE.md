@@ -91,7 +91,7 @@ the other.
 test button. The real modules use the same path: `houses`, `batches`,
 `mortality_events`, `bird_transfers`, `bird_sales`, `sales_allocations`,
 `bird_returns`, `vaccination_events`, `stock_items`, `stock_movements`,
-`expenses` and `expense_approvals`. Each
+`batch_weights`, `expenses` and `expense_approvals`. Each
 entity in `apps/api/src/sync/entities.ts` validates its own fields, declares the
 permissions that may write it and, where needed, the permissions that may pull
 it, and re-checks business rules inside the same
@@ -186,7 +186,7 @@ process memory. The deploy, backup and rollback steps are in
 | Database | `packages/db/test` | RLS across tenants, change sequence ordering, finance constraints, sale price checks, SQL splitting |
 | Offline engine | `packages/sync/test` | Atomic save, outbox ordering, push and pull, retry, permission-change reset, lock and unlock |
 | API | `apps/api/test` | Account flow over HTTP, sync push and pull, cross-tenant attempts, pull access by permission, per-account sign-in limits |
-| Poultry and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate, vaccinations, transfers, stock in kg, tenant boundaries |
+| Poultry and feed | `apps/api/test/poultry.test.ts` | Houses, batches, sale gate, vaccinations, transfers, stock in kg, delivery prices, weighings, tenant boundaries |
 | Finance | `apps/api/test/finance.test.ts` | Expense permissions, one decision per expense, priced and unpriced sales, tenant boundaries |
 | Allocation | `apps/api/test/allocations.test.ts` | Own-allocation sales, walk-in sales, over-allocation, returns, feed issued with the birds, cross-farm ids |
 | Pull access | `apps/api/test/pull-access.test.ts` | Which roles receive expenses, approvals and sale prices |

@@ -96,12 +96,14 @@ try {
          values ($1, $2, $3, 'feed', 'kg', $4)`,
         [feedId, farmId, 'Growers mash', 100],
       );
+      // The delivery carries its price so feed issued to the batch has a cost
+      // and the batch margin is not just revenue minus expenses.
       await tx.query(
         `insert into stock_movements
-           (id, farm_id, stock_item_id, kind, quantity_kg, note, recorded_at, recorded_by)
+           (id, farm_id, stock_item_id, kind, quantity_kg, unit_cost_kes_per_kg, note, recorded_at, recorded_by)
          values
-           ($1, $2, $3, 'receipt', 750, 'Opening delivery', now() - interval '20 days', $4),
-           ($5, $2, $3, 'issue', 120.5, 'First two weeks', now() - interval '6 days', $4)`,
+           ($1, $2, $3, 'receipt', 750, 62.5, 'Opening delivery', now() - interval '20 days', $4),
+           ($5, $2, $3, 'issue', 120.5, null, 'First two weeks', now() - interval '6 days', $4)`,
         [randomUUID(), farmId, feedId, ownerId, randomUUID()],
       );
       await tx.query(
@@ -117,6 +119,17 @@ try {
            (id, farm_id, batch_id, day, note, recorded_at, recorded_by)
          values ($1, $2, $3, 12, 'Gumboro', now() - interval '8 days', $4)`,
         [randomUUID(), farmId, batchId, ownerId],
+      );
+
+      // Two weighings, so the batch screen shows growth rather than a single
+      // number with nothing to compare it against.
+      await tx.query(
+        `insert into batch_weights
+           (id, farm_id, batch_id, sample_count, average_weight_kg, note, recorded_at, recorded_by)
+         values
+           ($1, $2, $3, 30, 0.42, 'Week one sample', now() - interval '12 days', $4),
+           ($5, $2, $3, 25, 1.05, 'Day 20 sample', now(), $4)`,
+        [randomUUID(), farmId, batchId, ownerId, randomUUID()],
       );
 
       // Birds handed to the demo salesperson, so the Sales screen has data.

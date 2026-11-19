@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  averageCostKesPerKg,
   batchFinance,
   expenseApprovalInputSchema,
   expenseInputSchema,
   expenseState,
   expensesByCategory,
+  feedCostKes,
   roundKes,
   saleRevenueKes,
   sumKes,
+  type CostedMovement,
   type ExpenseLike,
 } from '../src/finance.js';
 
@@ -121,5 +124,62 @@ describe('batch margin', () => {
     const result = batchFinance('batch-1', [sale('s1', 350), sale('s2', undefined)], [], []);
     expect(result.revenueKes).toBe(35000);
     expect(result.unpricedSales).toBe(1);
+  });
+
+  it('subtracts feed cost and reports feed that has no price', () => {
+    const result = batchFinance(
+      'batch-1',
+      [sale('s1', 350)],
+      [{ id: 'e1', category: 'transport', amountKes: 2000, batchId: 'batch-1' }],
+      [{ expenseId: 'e1', decision: 'approved' }],
+      { costKes: 4000, uncostedKg: 12.5 },
+    );
+    expect(result.revenueKes).toBe(35000);
+    expect(result.expensesKes).toBe(2000);
+    expect(result.feedCostKes).toBe(4000);
+    expect(result.uncostedFeedKg).toBe(12.5);
+    expect(result.marginKes).toBe(29000);
+  });
+});
+
+describe('feed cost', () => {
+  const receipt = (
+    stockItemId: string,
+    quantityKg: number,
+    unitCostKesPerKg?: number,
+  ): CostedMovement => ({ stockItemId, kind: 'receipt', quantityKg, unitCostKesPerKg });
+
+  const issue = (
+    stockItemId: string,
+    quantityKg: number,
+    kind: 'issue' | 'adjustment' = 'issue',
+  ): CostedMovement => ({ stockItemId, kind, quantityKg });
+
+  it('averages priced deliveries by weight, ignoring deliveries without a price', () => {
+    expect(
+      averageCostKesPerKg([
+        receipt('feed', 100, 60),
+        receipt('feed', 300, 80),
+        receipt('feed', 50),
+      ]),
+    ).toBe(75);
+    expect(averageCostKesPerKg([receipt('feed', 100)])).toBeNull();
+  });
+
+  it('values issues at the feed average and counts unpriced feed in kilograms', () => {
+    const result = feedCostKes(
+      [issue('feed', 20), issue('feed', 10), issue('other', 5)],
+      [receipt('feed', 100, 60), receipt('feed', 100, 80), receipt('other', 10)],
+    );
+    expect(result.costKes).toBe(2100);
+    expect(result.uncostedKg).toBe(5);
+  });
+
+  it('does not count adjustments or receipts as feed used', () => {
+    const result = feedCostKes(
+      [issue('feed', 5, 'adjustment'), receipt('feed', 100, 70)],
+      [receipt('feed', 100, 70)],
+    );
+    expect(result).toEqual({ costKes: 0, uncostedKg: 0 });
   });
 });

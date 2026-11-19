@@ -98,17 +98,18 @@ async function registerFarm() {
   return verified.json() as TokenBundle;
 }
 
-async function createStockKeeper(owner: TokenBundle) {
+async function createEmployee(
+  owner: TokenBundle,
+  role: 'stock_keeper' | 'salesperson',
+  name: string,
+): Promise<TokenBundle> {
+  const phone = nextPhone();
+  const username = `staff${phoneCounter}`;
   const created = await app.inject({
     method: 'POST',
     url: '/api/v1/employees',
     headers: auth(owner.accessToken),
-    payload: {
-      name: 'Joseph Mwangi',
-      phone: nextPhone(),
-      username: `joseph${phoneCounter}`,
-      role: 'stock_keeper',
-    },
+    payload: { name, phone, username, role },
   });
   expect(created.statusCode).toBe(201);
   const { tempPin } = created.json() as { tempPin: string };
@@ -116,10 +117,18 @@ async function createStockKeeper(owner: TokenBundle) {
   const login = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/staff-login',
-    payload: { username: `joseph${phoneCounter}`, pin: tempPin, deviceLabel: 'staff phone' },
+    payload: { username, pin: tempPin, deviceLabel: 'staff phone' },
   });
   expect(login.statusCode).toBe(200);
   return login.json() as TokenBundle;
+}
+
+async function createStockKeeper(owner: TokenBundle) {
+  return createEmployee(owner, 'stock_keeper', 'Joseph Mwangi');
+}
+
+async function createSalesperson(owner: TokenBundle) {
+  return createEmployee(owner, 'salesperson', 'Mary Wanjiku');
 }
 
 async function push(bundle: TokenBundle, records: SyncPushRequest['records']) {
@@ -554,5 +563,157 @@ describe('tenant boundaries', () => {
 
     const changes = await pull(farmB);
     expect(changes).toHaveLength(0);
+  });
+});
+
+describe('feed cost and growth', () => {
+  it('records a delivery price and pulls it back', async () => {
+    const owner = await registerFarm();
+    const itemId = await setupStockItem(owner);
+    const id = randomUUID();
+
+    const response = await push(owner, [
+      {
+        table: 'stock_movements',
+        id,
+        data: {
+          stockItemId: itemId,
+          kind: 'receipt',
+          quantityKg: 500,
+          unitCostKesPerKg: 68.5,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    expect(response.results[0]?.status).toBe('accepted');
+
+    const changes = await pull(owner);
+    expect(changes.find((change) => change.id === id)?.data).toMatchObject({
+      kind: 'receipt',
+      quantityKg: 500,
+      unitCostKesPerKg: 68.5,
+    });
+  });
+
+  it('refuses a price on feed already issued', async () => {
+    const owner = await registerFarm();
+    const itemId = await setupStockItem(owner);
+    const { batchId } = await setupBatch(owner);
+
+    const response = await push(owner, [
+      {
+        table: 'stock_movements',
+        id: randomUUID(),
+        data: {
+          stockItemId: itemId,
+          kind: 'issue',
+          quantityKg: 20,
+          batchId,
+          unitCostKesPerKg: 68.5,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    expect(response.results[0]).toMatchObject({ status: 'rejected', reason: 'invalid_record' });
+  });
+
+  it('records a weighing and pulls it back with its average', async () => {
+    const owner = await registerFarm();
+    const keeper = await createStockKeeper(owner);
+    const { batchId } = await setupBatch(owner);
+    const id = randomUUID();
+
+    const response = await push(keeper, [
+      {
+        table: 'batch_weights',
+        id,
+        data: {
+          batchId,
+          sampleCount: 20,
+          averageWeightKg: 1.85,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    expect(response.results[0]?.status).toBe('accepted');
+
+    const changes = await pull(owner);
+    expect(changes.find((change) => change.id === id)?.data).toMatchObject({
+      batchId,
+      sampleCount: 20,
+      averageWeightKg: 1.85,
+    });
+  });
+
+  it('keeps weighing away from a salesperson', async () => {
+    const owner = await registerFarm();
+    const seller = await createSalesperson(owner);
+    const { batchId } = await setupBatch(owner);
+
+    const response = await push(seller, [
+      {
+        table: 'batch_weights',
+        id: randomUUID(),
+        data: {
+          batchId,
+          sampleCount: 10,
+          averageWeightKg: 2.1,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    expect(response.results[0]).toMatchObject({ status: 'rejected', reason: 'forbidden' });
+  });
+
+  it('refuses a weighing with no birds or no positive weight', async () => {
+    const owner = await registerFarm();
+    const { batchId } = await setupBatch(owner);
+
+    const response = await push(owner, [
+      {
+        table: 'batch_weights',
+        id: randomUUID(),
+        data: {
+          batchId,
+          sampleCount: 0,
+          averageWeightKg: 1.5,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+      {
+        table: 'batch_weights',
+        id: randomUUID(),
+        data: {
+          batchId,
+          sampleCount: 10,
+          averageWeightKg: 0,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    expect(response.results.map((result) => result.reason)).toEqual([
+      'invalid_record',
+      'invalid_record',
+    ]);
+  });
+
+  it('will not weigh birds in another farm’s batch', async () => {
+    const farmA = await registerFarm();
+    const { batchId } = await setupBatch(farmA);
+    const farmB = await registerFarm();
+
+    const response = await push(farmB, [
+      {
+        table: 'batch_weights',
+        id: randomUUID(),
+        data: {
+          batchId,
+          sampleCount: 10,
+          averageWeightKg: 2,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+    expect(response.results[0]).toMatchObject({ status: 'rejected', reason: 'unknown_batch' });
   });
 });

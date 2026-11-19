@@ -5,7 +5,9 @@ import {
   expensesByCategory,
   expenseState,
   EXPENSE_CATEGORY_LABELS,
+  feedCostKes,
   groupMortalityByCause,
+  latestWeight,
   roundKes,
   roundKg,
   saleRevenueKes,
@@ -16,6 +18,7 @@ import {
 } from '@farmatics/shared';
 import type {
   Batch,
+  BatchWeight,
   BirdReturn,
   BirdSale,
   BirdTransfer,
@@ -77,6 +80,7 @@ export interface ReportInput {
   allocations: SalesAllocation[];
   returns: BirdReturn[];
   movements: StockMovement[];
+  weights: BatchWeight[];
   expenses: Expense[];
   approvals: ExpenseApproval[];
   team: ReadonlyArray<ReportTeamMember>;
@@ -107,6 +111,12 @@ export interface BatchReportRow {
   sold: number;
   feedUsedKg: number;
   feedPerBirdKg: number | null;
+  /** Latest weighing on this phone, or null before the first one. */
+  avgWeightKg: number | null;
+  /** Feed issued in the period valued at its delivery price. */
+  feedCostKes: number | null;
+  /** Issued feed with no delivery price, whose cost is therefore missing. */
+  uncostedFeedKg: number;
   revenueKes: number | null;
   expensesKes: number | null;
   marginKes: number | null;
@@ -258,6 +268,7 @@ export function buildFarmReport(
   const transfersIn = new Map<string, BirdTransfer[]>();
   const transfersOut = new Map<string, BirdTransfer[]>();
   const issuesByBatch = new Map<string, StockMovement[]>();
+  const weightsByBatch = new Map<string, BatchWeight[]>();
   const salesByAllocation = new Map<string, BirdSale[]>();
   const returnsByAllocation = new Map<string, BirdReturn[]>();
 
@@ -273,7 +284,12 @@ export function buildFarmReport(
   for (const movement of input.movements) {
     if (movement.kind === 'issue' && movement.batchId) push(issuesByBatch, movement.batchId, movement);
   }
+  for (const sample of input.weights) push(weightsByBatch, sample.batchId, sample);
   for (const event of input.returns) push(returnsByAllocation, event.allocationId, event);
+
+  // Deliveries are farm-wide; a batch's feed is valued from the same feed's
+  // average delivered price, so every batch agrees on what a kilogram cost.
+  const receipts = input.movements.filter((movement) => movement.kind === 'receipt');
 
   /** The batch's live count now, from every event on this phone. */
   function liveFor(candidate: Batch): number {
@@ -345,11 +361,14 @@ export function buildFarmReport(
         isInPeriod(sale.recordedAt, period),
       );
       const sold = batchSales.reduce((total, sale) => total + sale.count, 0);
-      const feedUsedKg = roundKg(
-        (issuesByBatch.get(batch.id) ?? [])
-          .filter((movement) => isInPeriod(movement.recordedAt, period))
-          .reduce((total, movement) => total + movement.quantityKg, 0),
+      const periodIssuesForBatch = (issuesByBatch.get(batch.id) ?? []).filter((movement) =>
+        isInPeriod(movement.recordedAt, period),
       );
+      const feedUsedKg = roundKg(
+        periodIssuesForBatch.reduce((total, movement) => total + movement.quantityKg, 0),
+      );
+      const feed = feedCostKes(periodIssuesForBatch, receipts);
+      const weight = latestWeight(weightsByBatch.get(batch.id) ?? []);
       const atRisk = birdsAtRisk(batch);
       const approvedExpenses = periodExpenses.filter(
         (expense) =>
@@ -359,6 +378,7 @@ export function buildFarmReport(
       const expensesKes = includeFinance
         ? sumKes(approvedExpenses.map((expense) => expense.amountKes))
         : null;
+      const feedCostKesValue = includeFinance ? feed.costKes : null;
 
       return {
         batchId: batch.id,
@@ -372,11 +392,14 @@ export function buildFarmReport(
         sold,
         feedUsedKg,
         feedPerBirdKg: sold > 0 ? roundKg(feedUsedKg / sold) : null,
+        avgWeightKg: weight ? weight.averageWeightKg : null,
+        feedCostKes: feedCostKesValue,
+        uncostedFeedKg: feed.uncostedKg,
         revenueKes,
         expensesKes,
         marginKes:
-          revenueKes !== null && expensesKes !== null
-            ? roundKes(revenueKes - expensesKes)
+          revenueKes !== null && expensesKes !== null && feedCostKesValue !== null
+            ? roundKes(revenueKes - expensesKes - feedCostKesValue)
             : null,
         unpricedSales: batchSales.filter((sale) => saleRevenueKes(sale) === null).length,
       };
@@ -387,6 +410,7 @@ export function buildFarmReport(
         row.mortality > 0 ||
         row.sold > 0 ||
         row.feedUsedKg > 0 ||
+        row.avgWeightKg !== null ||
         (row.revenueKes ?? 0) > 0 ||
         (row.expensesKes ?? 0) > 0,
     )

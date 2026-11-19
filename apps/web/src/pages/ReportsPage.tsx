@@ -18,6 +18,7 @@ import {
   toSales,
   toStockMovements,
   toTransfers,
+  toWeights,
   useFarmData,
 } from '../local.js';
 import { canSeeFinance } from '../money.js';
@@ -116,6 +117,7 @@ export function ReportsPage() {
           allocations: toAllocations(data.sales_allocations),
           returns: toReturns(data.bird_returns),
           movements: toStockMovements(data.stock_movements),
+          weights: toWeights(data.batch_weights),
           expenses: toExpenses(data.expenses),
           approvals: toExpenseApprovals(data.expense_approvals),
           team,
@@ -149,11 +151,14 @@ export function ReportsPage() {
       { header: 'Unpriced sales', value: (row) => row.unpricedSales },
       { header: 'Feed kg', value: (row) => row.feedUsedKg },
       { header: 'Feed per bird kg', value: (row) => row.feedPerBirdKg ?? '' },
+      { header: 'Avg weight kg', value: (row) => row.avgWeightKg ?? '' },
     ];
     if (report.finance) {
       columns.push(
         { header: 'Revenue KES', value: (row) => row.revenueKes ?? '' },
         { header: 'Expenses KES', value: (row) => row.expensesKes ?? '' },
+        { header: 'Feed cost KES', value: (row) => row.feedCostKes ?? '' },
+        { header: 'Uncosted feed kg', value: (row) => row.uncostedFeedKg },
         { header: 'Margin KES', value: (row) => row.marginKes ?? '' },
       );
     }
@@ -291,10 +296,12 @@ export function ReportsPage() {
                         <th scope="col">Sold</th>
                         <th scope="col">Feed</th>
                         <th scope="col">kg/bird</th>
+                        <th scope="col">Avg wt</th>
                         {report.finance && (
                           <>
                             <th scope="col">In</th>
                             <th scope="col">Out</th>
+                            <th scope="col">Feed cost</th>
                             <th scope="col">Margin</th>
                           </>
                         )}
@@ -329,6 +336,9 @@ export function ReportsPage() {
                           </td>
                           <td className="num">{row.feedUsedKg} kg</td>
                           <td className="num">{row.feedPerBirdKg ?? '—'}</td>
+                          <td className="num">
+                            {row.avgWeightKg === null ? '—' : `${row.avgWeightKg} kg`}
+                          </td>
                           {report.finance && (
                             <>
                               <td className="num">
@@ -336,6 +346,15 @@ export function ReportsPage() {
                               </td>
                               <td className="num">
                                 {row.expensesKes === null ? '—' : formatKes(row.expensesKes)}
+                              </td>
+                              <td className="num">
+                                {row.feedCostKes === null ? '—' : formatKes(row.feedCostKes)}
+                                {row.uncostedFeedKg > 0 && (
+                                  <span className="list-sub">
+                                    {' '}
+                                    ({row.uncostedFeedKg} kg unpriced)
+                                  </span>
+                                )}
                               </td>
                               <td className="num">
                                 {row.marginKes === null ? '—' : formatKes(row.marginKes)}
@@ -349,8 +368,9 @@ export function ReportsPage() {
                 </div>
               )}
               <p className="muted">
-                Live birds is where the flock stands now. Deaths, sales and feed cover the
-                chosen period.
+                Live birds is where the flock stands now. Deaths, sales, feed and weight cover
+                the chosen period. Margin subtracts approved expenses and feed cost from priced
+                sales.
               </p>
             </div>
           </section>
@@ -468,6 +488,10 @@ export function ReportsPage() {
                   </p>
                 )}
                 <p className="muted">Only approved expenses count as money out.</p>
+                <p className="muted">
+                  This is the cash book. Batch margin goes further and also subtracts the cost
+                  of feed issued, valued from delivery prices.
+                </p>
               </div>
             </section>
           )}

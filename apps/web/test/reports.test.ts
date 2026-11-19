@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   Batch,
+  BatchWeight,
   BirdReturn,
   BirdSale,
   BirdTransfer,
@@ -112,8 +113,20 @@ const movement = (over: Partial<StockMovement> = {}): StockMovement => ({
   quantityKg: 1,
   batchId: 'b1',
   allocationId: null,
+  unitCostKesPerKg: null,
   note: null,
   recordedAt: '2026-05-05T08:00:00.000Z',
+  dirty: false,
+  ...over,
+});
+
+const weight = (over: Partial<BatchWeight> = {}): BatchWeight => ({
+  id: nextId('w'),
+  batchId: 'b1',
+  sampleCount: 20,
+  averageWeightKg: 1.85,
+  note: null,
+  recordedAt: '2026-05-10T08:00:00.000Z',
   dirty: false,
   ...over,
 });
@@ -150,6 +163,7 @@ function makeInput(over: Partial<ReportInput> = {}): ReportInput {
     allocations: [],
     returns: [],
     movements: [],
+    weights: [],
     expenses: [],
     approvals: [],
     team: [],
@@ -448,5 +462,56 @@ describe('batch selection', () => {
       { includeFinance: false },
     );
     expect(report.batches[0]).toMatchObject({ feedUsedKg: 12, feedPerBirdKg: null });
+  });
+});
+
+describe('feed cost and weight', () => {
+  const input = makeInput({
+    batches: [batch()],
+    sales: [sale({ count: 4, unitPriceKes: 500 })],
+    expenses: [expense({ amountKes: 300 })],
+    movements: [
+      movement({ kind: 'receipt', quantityKg: 100, unitCostKesPerKg: 60 }),
+      movement({ quantityKg: 20 }),
+    ],
+    weights: [weight({ averageWeightKg: 2.4 })],
+  });
+  const approvals = [approval(input.expenses[0]!.id, 'approved')];
+
+  it('values period feed at its delivery price and subtracts it from margin', () => {
+    const report = buildFarmReport({ ...input, approvals }, MAY, { includeFinance: true });
+    expect(report.batches[0]).toMatchObject({
+      feedUsedKg: 20,
+      feedCostKes: 1200,
+      uncostedFeedKg: 0,
+      revenueKes: 2000,
+      expensesKes: 300,
+      marginKes: 500,
+      avgWeightKg: 2.4,
+    });
+  });
+
+  it('reports feed with no delivery price instead of costing it as zero', () => {
+    const report = buildFarmReport(
+      makeInput({
+        batches: [batch()],
+        movements: [movement({ quantityKg: 7, stockItemId: 'unpriced' })],
+      }),
+      MAY,
+      { includeFinance: true },
+    );
+    expect(report.batches[0]).toMatchObject({
+      feedCostKes: 0,
+      uncostedFeedKg: 7,
+    });
+  });
+
+  it('hides feed cost with the rest of the money when finance is closed', () => {
+    const report = buildFarmReport({ ...input, approvals }, MAY, { includeFinance: false });
+    expect(report.batches[0]).toMatchObject({
+      feedCostKes: null,
+      marginKes: null,
+      avgWeightKg: 2.4,
+    });
   });
 });
